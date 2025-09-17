@@ -13,6 +13,9 @@ find_package(Clang 17 REQUIRED CONFIG)
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${CLANG_INCLUDE_DIRS})
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Try to find xxHash (system installed). If found, define macro.
 find_path(XXHASH_INCLUDE_DIR xxhash.h)
 find_library(XXHASH_LIBRARY NAMES xxhash libxxhash)
@@ -25,24 +28,29 @@ else()
   set(HAVE_XXHASH FALSE)
 endif()
 
-add_executable(brinfo
-  BrInfo.cpp
-  Analysis.cpp
-  Condition.cpp
-  CondChain.cpp
-  Meta.cpp
-  MetaBridge.cpp
+add_library(brinfo_core
+  src/core/Analysis.cpp
+  src/core/Condition.cpp
+  src/core/CondChain.cpp
+  src/core/Meta.cpp
+  src/core/MetaBridge.cpp
 )
-
-target_link_libraries(brinfo
-  PRIVATE
+target_include_directories(brinfo_core PUBLIC include)
+target_link_libraries(brinfo_core PUBLIC
   clangFrontend
   clangTooling
   nlohmann_json::nlohmann_json
   $<$<BOOL:${HAVE_XXHASH}>:${XXHASH_LIBRARY}>
-  )
+)
+
+add_executable(brinfo
+  src/frontend/BrInfo.cpp
+  # src/frontend/Matcher.cpp
+)
+target_link_libraries(brinfo PRIVATE brinfo_core)
 
 if(HAVE_XXHASH)
+  target_compile_definitions(brinfo_core PUBLIC BRINFO_HAVE_XXHASH=1)
   target_compile_definitions(brinfo PRIVATE BRINFO_HAVE_XXHASH=1)
 endif()
 

@@ -1,5 +1,5 @@
-#include "Analysis.h"
-#include "debug_macros.h"
+#include "brinfo/Analysis.h"
+#include "brinfo/debug_macros.h"
 #include "clang/AST/DeclBase.h"
 #include "clang/AST/Type.h"
 #include "clang/Analysis/CFG.h"

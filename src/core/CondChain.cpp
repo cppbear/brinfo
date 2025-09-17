@@ -1,5 +1,5 @@
-#include "CondChain.h"
-#include "OrderedSet.h"
+#include "brinfo/CondChain.h"
+#include "brinfo/OrderedSet.h"
 #include "clang/Basic/SourceManager.h"
 
 extern string RealProjectPath;

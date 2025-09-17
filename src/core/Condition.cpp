@@ -1,4 +1,4 @@
-#include "Condition.h"
+#include "brinfo/Condition.h"
 
 namespace BrInfo {
 

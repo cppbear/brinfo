@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Analysis.h"
-#include "CFGDOT.h"
-#include "Meta.h"
+#include "brinfo/Analysis.h"
+#include "brinfo/CFGDOT.h"
+#include "brinfo/Meta.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Tooling/Execution.h"
 
