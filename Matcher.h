@@ -2,6 +2,7 @@
 
 #include "Analysis.h"
 #include "CFGDOT.h"
+#include "Meta.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Tooling/Execution.h"
 
@@ -105,6 +106,7 @@ inline int run(ClangTool &Tool) {
   }
   int Res = Tool.run(newFrontendActionFactory(&Finder).get());
   Analyzer.dumpReqToJson(RealProjectPath, FileName, ClassName, FunctionName);
+  MetaCollector::dumpAll(RealProjectPath);
   return Res;
 }
 

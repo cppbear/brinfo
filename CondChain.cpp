@@ -695,7 +695,8 @@ set<tuple<const Stmt *, string, bool>> CondChainInfo::getCondSet() const {
   for (CondStatus Cond : Chain) {
     if (Cond.Condition) {
       bool Flag = Cond.Flag;
-      Set.insert({Cond.Condition->getCond(), Cond.Condition->getCondStr(), Flag});
+      Set.insert(
+          {Cond.Condition->getCond(), Cond.Condition->getCondStr(), Flag});
     }
   }
   return Set;

@@ -717,8 +717,9 @@ static void print_block(raw_ostream &OS, const CFG *cfg, const CFGBlock &B,
 static StmtPrinterHelper *GraphHelper;
 
 inline void dumpCFGToDot(const CFG *cfg, const LangOptions &LO,
-                  const std::string &DirPath, const std::string &GraphName,
-                  const std::string &Title) {
+                         const std::string &DirPath,
+                         const std::string &GraphName,
+                         const std::string &Title) {
   StmtPrinterHelper H(cfg, LO);
   GraphHelper = &H;
   std::string Filename = DirPath + "/" + GraphName + ".dot";

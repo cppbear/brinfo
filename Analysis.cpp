@@ -252,6 +252,9 @@ void Analysis::condChainsToReqs() {
   Json["class"] = ClassName;
 
   unsigned MinCoverNum = 0;
+  // collect return strings for meta
+  std::vector<std::string> ReturnStrs;
+  ReturnStrs.reserve(Size);
   for (unsigned ID = 0; ID < Size; ++ID) {
     string CondChainStr = formatID(to_string(ID));
     string Result = "";
@@ -259,6 +262,7 @@ void Analysis::condChainsToReqs() {
       Result = CondChains[ID].getReturnStr(
           Context, CanonicalDecl->getReturnType().getAsString());
     }
+    ReturnStrs.push_back(Result);
     json J = CondChains[ID].toTestReqs(Context);
     if (!MinCover.empty() && MinCover.find(ID) == MinCover.end())
       J["mincover"] = false;
@@ -277,6 +281,14 @@ void Analysis::condChainsToReqs() {
   Json["chains"]["size"] = Json["chains"].size();
   Json["chains"]["mincover"] = MinCoverNum;
   Results[Signature] = Json;
+
+  // meta collection integration (ignore contra chains already removed above)
+  extern void metaRecordFunction(
+      const FunctionDecl *, ASTContext *, const std::string &,
+      const std::vector<CondChainInfo> &, const std::unordered_set<unsigned> &,
+      const std::vector<std::string> &);
+  metaRecordFunction(CanonicalDecl, Context, Signature, this->CondChains,
+                     MinCover, ReturnStrs);
 }
 
 void Analysis::clear() {
