@@ -95,7 +95,7 @@ The condition chains analyzed by the tool will be saved as JSON files with the f
 2. Install development packages:
 
    ```shell
-   sudo apt install -y llvm-17-dev libclang-17-dev clang-tools-17 clang-17 pkg-config
+   sudo apt install -y llvm-17-dev libclang-17-dev clang-tools-17 clang-17 pkg-config xxhash libxxhash-dev
    ```
 
 3. Config CMake
