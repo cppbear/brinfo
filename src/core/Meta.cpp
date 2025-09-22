@@ -7,9 +7,6 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
-#ifdef BRINFO_HAVE_XXHASH
-#include <xxhash.h>
-#endif
 
 namespace BrInfo {
 
@@ -19,15 +16,6 @@ std::vector<FunctionMetaEntry> MetaCollector::Functions;
 std::vector<ChainMetaEntry> MetaCollector::Chains;
 std::unordered_map<std::string, uint32_t> MetaCollector::ConditionKey2Id;
 std::unordered_map<uint64_t, uint32_t> MetaCollector::FuncHash2Id;
-
-// hash64 prefers xxHash (XXH3_64bits) if available, otherwise FNV-1a fallback
-uint64_t MetaCollector::hash64(const std::string &Data) {
-#ifdef BRINFO_HAVE_XXHASH
-  return XXH3_64bits(Data.data(), Data.size());
-#else
-  return fnv1a64(Data);
-#endif
-}
 
 uint64_t MetaCollector::hashCombine(uint64_t H, uint64_t V) {
   // simple mix
@@ -49,13 +37,13 @@ MetaCollector::rollingHash(const std::vector<std::pair<uint32_t, bool>> &Seq) {
 uint64_t MetaCollector::returnHash(const std::string &Str) {
   if (Str.empty())
     return 0ULL;
-  return hash64(Str);
+  return BrInfo::hash64(Str);
 }
 
 uint64_t MetaCollector::conditionHash(const std::string &File, unsigned Line,
                                       const std::string &Cond) {
   std::string Key = File + ":" + std::to_string(Line) + ":" + Cond;
-  return hash64(Key);
+  return BrInfo::hash64(Key);
 }
 
 uint32_t MetaCollector::getOrCreateConditionId(const std::string &File,
@@ -116,7 +104,7 @@ void MetaCollector::recordFunction(
 
   std::string FilePath =
       Context->getSourceManager().getFilename(FD->getLocation()).str();
-  uint64_t FuncHash = hash64(Signature);
+  uint64_t FuncHash = BrInfo::hash64(Signature);
   uint32_t FuncId = getOrCreateFunctionId(FuncHash, Signature,
                                           FD->getNameAsString(), FilePath);
 

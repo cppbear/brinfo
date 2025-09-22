@@ -4,6 +4,10 @@
 #include <sstream>
 #include <string>
 
+#ifdef BRINFO_HAVE_XXHASH
+#include <xxhash.h>
+#endif
+
 namespace BrInfo {
 inline std::string toHex64(uint64_t V) {
   std::ostringstream os;
@@ -25,5 +29,17 @@ inline uint64_t fnv1a64(const void *Data, size_t Len) {
 
 inline uint64_t fnv1a64(const std::string &S) {
   return fnv1a64(S.data(), S.size());
+}
+
+inline uint64_t hash64(const void *Data, size_t Len) {
+#ifdef BRINFO_HAVE_XXHASH
+  return XXH3_64bits(Data, Len);
+#else
+  return fnv1a64(Data, Len);
+#endif
+}
+
+inline uint64_t hash64(const std::string &S) {
+  return hash64(S.data(), S.size());
 }
 } // namespace BrInfo

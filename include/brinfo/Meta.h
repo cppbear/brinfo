@@ -59,7 +59,6 @@ public:
   static void dumpAll(const std::string &ProjectRoot);
 
 private:
-  static uint64_t hash64(const std::string &Data);
   static uint64_t hashCombine(uint64_t H, uint64_t V);
   static uint64_t
   rollingHash(const std::vector<std::pair<uint32_t, bool>> &Seq);

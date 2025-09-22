@@ -60,3 +60,25 @@ endif()
 
 install(TARGETS brinfo
   RUNTIME DESTINATION bin)
+
+add_library(brinfo_runtime
+  src/runtime/Runtime.cpp
+)
+target_include_directories(brinfo_runtime PUBLIC include)
+
+add_executable(brinfo_inst
+  src/instrumenter/Instrumenter.cpp
+)
+target_link_libraries(brinfo_inst PRIVATE
+  clangFrontend
+  clangRewrite
+  clangTooling
+  brinfo_runtime
+)
+  if(HAVE_XXHASH)
+    target_compile_definitions(brinfo_inst PRIVATE BRINFO_HAVE_XXHASH=1)
+    target_link_libraries(brinfo_inst PRIVATE ${XXHASH_LIBRARY})
+  endif()
+
+install(TARGETS brinfo_inst
+  RUNTIME DESTINATION bin)
