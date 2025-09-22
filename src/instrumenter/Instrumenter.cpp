@@ -29,6 +29,8 @@ class IfInstrumentVisitor : public RecursiveASTVisitor<IfInstrumentVisitor> {
   struct SwitchCtx {
     std::string File;
     unsigned Line = 0;
+    std::string SwitchNorm;
+    std::vector<std::string> CaseNorms;
   };
   std::vector<SwitchCtx> SwitchStack;
 
@@ -48,6 +50,89 @@ class IfInstrumentVisitor : public RecursiveASTVisitor<IfInstrumentVisitor> {
              containsLogicalOp(CO->getFalseExpr());
     }
     return false;
+  }
+
+  static std::string rtrimSemiSpace(std::string S) {
+    while (!S.empty() &&
+           (isspace(static_cast<unsigned char>(S.back())) || S.back() == ';'))
+      S.pop_back();
+    return S;
+  }
+
+  static std::string escapeForCxxString(const std::string &S) {
+    std::string Out;
+    Out.reserve(S.size() + 8);
+    for (char c : S) {
+      switch (c) {
+      case '\\':
+        Out += "\\\\";
+        break;
+      case '"':
+        Out += "\\\"";
+        break;
+      case '\n':
+        Out += "\\n";
+        break;
+      case '\t':
+        Out += "\\t";
+        break;
+      default:
+        if ((unsigned char)c < 0x20) {
+          // drop other control chars
+        } else {
+          Out += c;
+        }
+      }
+    }
+    return Out;
+  }
+
+  // Strict normalization mirroring BaseCond::setCondStr: != -> ==, !X -> X
+  std::string condNormFromExpr(const Expr *E) {
+    if (!E)
+      return "";
+    const Expr *PE = E->IgnoreParenImpCasts();
+    std::string Norm;
+    llvm::raw_string_ostream OS(Norm);
+    if (const auto *BO = dyn_cast<BinaryOperator>(PE)) {
+      if (BO->getOpcode() == BinaryOperatorKind::BO_NE) {
+        BO->getLHS()->IgnoreParenImpCasts()->printPretty(OS, nullptr, LO);
+        OS << " == ";
+        BO->getRHS()->IgnoreParenImpCasts()->printPretty(OS, nullptr, LO);
+        OS.flush();
+        return rtrimSemiSpace(Norm);
+      }
+    } else if (const auto *UO = dyn_cast<UnaryOperator>(PE)) {
+      if (UO->getOpcode() == UnaryOperatorKind::UO_LNot) {
+        UO->getSubExpr()->IgnoreParenImpCasts()->printPretty(OS, nullptr, LO);
+        OS.flush();
+        return rtrimSemiSpace(Norm);
+      }
+    }
+    PE->printPretty(OS, nullptr, LO);
+    OS.flush();
+    return rtrimSemiSpace(Norm);
+  }
+
+  // Determine if normalization flipped the logical polarity
+  bool condNormFlipped(const Expr *E) {
+    if (!E)
+      return false;
+    const Expr *PE = E->IgnoreParenImpCasts();
+    if (const auto *BO = dyn_cast<BinaryOperator>(PE)) {
+      return BO->getOpcode() == BinaryOperatorKind::BO_NE;
+    }
+    if (const auto *UO = dyn_cast<UnaryOperator>(PE)) {
+      return UO->getOpcode() == UnaryOperatorKind::UO_LNot;
+    }
+    return false;
+  }
+
+  std::pair<std::string, uint64_t>
+  makeCondNormAndHash(const std::string &File, unsigned Line, const Expr *E) {
+    std::string Norm = condNormFromExpr(E);
+    uint64_t H = BrInfo::hash64(File + ":" + std::to_string(Line) + ":" + Norm);
+    return {Norm, H};
   }
 
 public:
@@ -95,12 +180,17 @@ public:
     if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
       return true;
     unsigned Line = SM.getSpellingLineNumber(SL);
+    std::string File = SM.getFilename(SL).str();
+    auto [Norm, H] = makeCondNormAndHash(File, Line, Cond);
+    bool Flip = condNormFlipped(Cond);
     std::string Inject = std::string("BrInfo::Runtime::LogCond(") +
-                         BrInfo::toHex64(CurrentFuncHash) + ", \"" +
-                         SM.getFilename(SL).str() + "\", " +
-                         std::to_string(Line) + ", (bool)(";
+                         BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
+                         "\", " + std::to_string(Line) + ", (bool)(";
     R.InsertText(Cond->getBeginLoc(), Inject, true, true);
-    R.InsertTextAfterToken(Cond->getEndLoc(), "))");
+    std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
+                         "\", " + BrInfo::toHex64(H) + ", " +
+                         (Flip ? "true" : "false") + ")";
+    R.InsertTextAfterToken(Cond->getEndLoc(), Suffix);
     return true;
   }
 
@@ -114,12 +204,17 @@ public:
     if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
       return true;
     unsigned Line = SM.getSpellingLineNumber(SL);
+    std::string File = SM.getFilename(SL).str();
+    auto [Norm, H] = makeCondNormAndHash(File, Line, Cond);
+    bool Flip = condNormFlipped(Cond);
     std::string Inject = std::string("BrInfo::Runtime::LogCond(") +
-                         BrInfo::toHex64(CurrentFuncHash) + ", \"" +
-                         SM.getFilename(SL).str() + "\", " +
-                         std::to_string(Line) + ", (bool)(";
+                         BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
+                         "\", " + std::to_string(Line) + ", (bool)(";
     R.InsertText(Cond->getBeginLoc(), Inject, true, true);
-    R.InsertTextAfterToken(Cond->getEndLoc(), "))");
+    std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
+                         "\", " + BrInfo::toHex64(H) + ", " +
+                         (Flip ? "true" : "false") + ")";
+    R.InsertTextAfterToken(Cond->getEndLoc(), Suffix);
     return true;
   }
 
@@ -133,12 +228,17 @@ public:
     if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
       return true;
     unsigned Line = SM.getSpellingLineNumber(SL);
+    std::string File = SM.getFilename(SL).str();
+    auto [Norm, H] = makeCondNormAndHash(File, Line, Cond);
+    bool Flip = condNormFlipped(Cond);
     std::string Inject = std::string("BrInfo::Runtime::LogCond(") +
-                         BrInfo::toHex64(CurrentFuncHash) + ", \"" +
-                         SM.getFilename(SL).str() + "\", " +
-                         std::to_string(Line) + ", (bool)(";
+                         BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
+                         "\", " + std::to_string(Line) + ", (bool)(";
     R.InsertText(Cond->getBeginLoc(), Inject, true, true);
-    R.InsertTextAfterToken(Cond->getEndLoc(), "))");
+    std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
+                         "\", " + BrInfo::toHex64(H) + ", " +
+                         (Flip ? "true" : "false") + ")";
+    R.InsertTextAfterToken(Cond->getEndLoc(), Suffix);
     return true;
   }
 
@@ -152,12 +252,17 @@ public:
     if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
       return true;
     unsigned Line = SM.getSpellingLineNumber(SL);
+    std::string File = SM.getFilename(SL).str();
+    auto [Norm, H] = makeCondNormAndHash(File, Line, Cond);
+    bool Flip = condNormFlipped(Cond);
     std::string Inject = std::string("BrInfo::Runtime::LogCond(") +
-                         BrInfo::toHex64(CurrentFuncHash) + ", \"" +
-                         SM.getFilename(SL).str() + "\", " +
-                         std::to_string(Line) + ", (bool)(";
+                         BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
+                         "\", " + std::to_string(Line) + ", (bool)(";
     R.InsertText(Cond->getBeginLoc(), Inject, true, true);
-    R.InsertTextAfterToken(Cond->getEndLoc(), "))");
+    std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
+                         "\", " + BrInfo::toHex64(H) + ", " +
+                         (Flip ? "true" : "false") + ")";
+    R.InsertTextAfterToken(Cond->getEndLoc(), Suffix);
     return true;
   }
 
@@ -171,12 +276,17 @@ public:
     if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
       return true;
     unsigned Line = SM.getSpellingLineNumber(SL);
+    std::string File = SM.getFilename(SL).str();
+    auto [Norm, H] = makeCondNormAndHash(File, Line, Cond);
+    bool Flip = condNormFlipped(Cond);
     std::string Inject = std::string("BrInfo::Runtime::LogCond(") +
-                         BrInfo::toHex64(CurrentFuncHash) + ", \"" +
-                         SM.getFilename(SL).str() + "\", " +
-                         std::to_string(Line) + ", (bool)(";
+                         BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
+                         "\", " + std::to_string(Line) + ", (bool)(";
     R.InsertText(Cond->getBeginLoc(), Inject, true, true);
-    R.InsertTextAfterToken(Cond->getEndLoc(), "))");
+    std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
+                         "\", " + BrInfo::toHex64(H) + ", " +
+                         (Flip ? "true" : "false") + ")";
+    R.InsertTextAfterToken(Cond->getEndLoc(), Suffix);
     return true;
   }
 
@@ -190,9 +300,18 @@ public:
     if (Colon.isValid()) {
       std::string File = SwitchStack.empty() ? SM.getFilename(KL).str()
                                              : SwitchStack.back().File;
+      std::string SwitchNorm =
+          SwitchStack.empty() ? std::string("") : SwitchStack.back().SwitchNorm;
+      std::string CaseVal = condNormFromExpr(CS->getLHS());
+      std::string Norm = SwitchNorm.empty() ? (std::string("case ") + CaseVal)
+                                            : (SwitchNorm + " == " + CaseVal);
+      uint64_t H =
+          BrInfo::hash64(File + ":" + std::to_string(Line) + ":" + Norm);
       std::string Inject = std::string(" BrInfo::Runtime::LogCond(") +
                            BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
-                           "\", " + std::to_string(Line) + ", true);";
+                           "\", " + std::to_string(Line) + ", true, \"" +
+                           escapeForCxxString(Norm) + "\", " +
+                           BrInfo::toHex64(H) + ", false);";
       R.InsertTextAfterToken(Colon, Inject);
     }
     return true;
@@ -208,9 +327,29 @@ public:
     if (Colon.isValid()) {
       std::string File = SwitchStack.empty() ? SM.getFilename(KL).str()
                                              : SwitchStack.back().File;
+      std::string SwitchNorm =
+          SwitchStack.empty() ? std::string("") : SwitchStack.back().SwitchNorm;
+      const std::vector<std::string> emptyCases;
+      const std::vector<std::string> &Cases =
+          SwitchStack.empty() ? emptyCases : SwitchStack.back().CaseNorms;
+      std::string Norm;
+      if (!SwitchNorm.empty() && !Cases.empty()) {
+        Norm = SwitchNorm + " == " + Cases.front();
+        for (size_t i = 1; i < Cases.size(); ++i) {
+          Norm += " || " + SwitchNorm + " == " + Cases[i];
+        }
+      } else if (!SwitchNorm.empty()) {
+        Norm = SwitchNorm;
+      } else {
+        Norm = "default";
+      }
+      uint64_t H =
+          BrInfo::hash64(File + ":" + std::to_string(Line) + ":" + Norm);
       std::string Inject = std::string(" BrInfo::Runtime::LogCond(") +
                            BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
-                           "\", " + std::to_string(Line) + ", true);";
+                           "\", " + std::to_string(Line) + ", true, \"" +
+                           escapeForCxxString(Norm) + "\", " +
+                           BrInfo::toHex64(H) + ", false);";
       R.InsertTextAfterToken(Colon, Inject);
     }
     return true;
@@ -222,9 +361,23 @@ public:
       return true;
     unsigned Line = SM.getSpellingLineNumber(ForLoc);
     std::string File = SM.getFilename(ForLoc).str();
+    // Build a stable cond_norm from range-init if available
+    std::string Norm;
+    if (Stmt *Init = FR->getRangeInit()) {
+      llvm::raw_string_ostream OS(Norm);
+      Init->printPretty(OS, nullptr, LO);
+      OS.flush();
+      Norm = rtrimSemiSpace(Norm);
+      Norm = std::string("range_for:") + Norm;
+    } else {
+      Norm = "range_for";
+    }
+    uint64_t H = BrInfo::hash64(File + ":" + std::to_string(Line) + ":" + Norm);
     std::string LogStmt = std::string("BrInfo::Runtime::LogCond(") +
                           BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
-                          "\", " + std::to_string(Line) + ", true);";
+                          "\", " + std::to_string(Line) + ", true, \"" +
+                          escapeForCxxString(Norm) + "\", " +
+                          BrInfo::toHex64(H) + ", false);";
 
     Stmt *Body = FR->getBody();
     if (isa<CompoundStmt>(Body)) {
@@ -249,6 +402,24 @@ public:
         Ctx.File = SM.getFilename(SL).str();
       }
     }
+    // Precompute normalized switch condition
+    if (Expr *Cond = SS->getCond()) {
+      Ctx.SwitchNorm = condNormFromExpr(Cond);
+    }
+    // Collect case values in source order
+    std::vector<std::pair<unsigned, std::string>> casesWithPos;
+    for (SwitchCase *SC = SS->getSwitchCaseList(); SC;
+         SC = SC->getNextSwitchCase()) {
+      if (auto *CS = dyn_cast<CaseStmt>(SC)) {
+        SourceLocation BL = CS->getBeginLoc();
+        unsigned off = BL.isValid() ? SM.getFileOffset(BL) : 0u;
+        casesWithPos.emplace_back(off, condNormFromExpr(CS->getLHS()));
+      }
+    }
+    llvm::sort(casesWithPos.begin(), casesWithPos.end(),
+               [](const auto &a, const auto &b) { return a.first < b.first; });
+    for (auto &p : casesWithPos)
+      Ctx.CaseNorms.push_back(std::move(p.second));
     SwitchStack.push_back(Ctx);
     bool Res = RecursiveASTVisitor::TraverseSwitchStmt(SS);
     SwitchStack.pop_back();
@@ -340,12 +511,20 @@ public:
       if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
         return;
       unsigned Line = SM.getSpellingLineNumber(SL);
+      // Build cond_norm using strict normalization and compute flip flag
+      std::string Norm = condNormFromExpr(E);
+      bool Flip = condNormFlipped(E);
+      std::string File = SM.getFilename(SL).str();
+      uint64_t H =
+          BrInfo::hash64(File + ":" + std::to_string(Line) + ":" + Norm);
       std::string Prefix = std::string("BrInfo::Runtime::LogCond(") +
-                           BrInfo::toHex64(CurrentFuncHash) + ", \"" +
-                           SM.getFilename(SL).str() + "\", " +
-                           std::to_string(Line) + ", (bool)(";
+                           BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
+                           "\", " + std::to_string(Line) + ", (bool)(";
       R.InsertText(E->getBeginLoc(), Prefix, true, true);
-      R.InsertTextAfterToken(E->getEndLoc(), "))");
+      std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
+                           "\", " + BrInfo::toHex64(H) + ", " +
+                           (Flip ? "true" : "false") + ")";
+      R.InsertTextAfterToken(E->getEndLoc(), Suffix);
     };
     wrapOperand(BO->getLHS());
     wrapOperand(BO->getRHS());

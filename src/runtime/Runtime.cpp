@@ -56,15 +56,33 @@ void Init(const char *path) {
   std::call_once(InitOnce(), [path]() { DoInit(path); });
 }
 
-bool LogCond(uint64_t funcHash, const char *file, unsigned line, bool value) {
-  std::call_once(InitOnce(), []() { DoInit(nullptr); });
-  std::lock_guard<std::mutex> lock(FileMutex());
+static void WriteJson(uint64_t funcHash, const char *file, unsigned line,
+                      bool value, const char *condNorm,
+                      const uint64_t *condHashOpt, const bool *normFlipOpt) {
   LogFile() << "{\"ts\":\"" << NowISO8601() << "\",";
   LogFile() << "\"type\":\"cond\",";
   LogFile() << "\"func\":\"0x" << std::hex << funcHash << std::dec << "\",";
   LogFile() << "\"file\":\"" << (file ? file : "") << "\",";
   LogFile() << "\"line\":" << line << ",";
-  LogFile() << "\"val\":" << (value ? 1 : 0) << "}\n";
+  LogFile() << "\"val\":" << (value ? 1 : 0);
+  if (condNorm) {
+    LogFile() << ",\"cond_norm\":\"" << condNorm << "\"";
+  }
+  if (condHashOpt) {
+    LogFile() << ",\"cond_hash\":\"0x" << std::hex << *condHashOpt << std::dec
+              << "\"";
+  }
+  if (normFlipOpt) {
+    LogFile() << ",\"norm_flip\":" << (*normFlipOpt ? 1 : 0);
+  }
+  LogFile() << "}\n";
+}
+
+bool LogCond(uint64_t funcHash, const char *file, unsigned line, bool value,
+             const char *condNorm, uint64_t condHash, bool normFlip) {
+  std::call_once(InitOnce(), []() { DoInit(nullptr); });
+  std::lock_guard<std::mutex> lock(FileMutex());
+  WriteJson(funcHash, file, line, value, condNorm, &condHash, &normFlip);
   LogFile().flush();
   return value;
 }
