@@ -25,11 +25,30 @@ class IfInstrumentVisitor : public RecursiveASTVisitor<IfInstrumentVisitor> {
   SourceManager &SM;
   const LangOptions &LO;
   uint64_t CurrentFuncHash = 0;
+  int CondDepth = 0;
   struct SwitchCtx {
     std::string File;
     unsigned Line = 0;
   };
   std::vector<SwitchCtx> SwitchStack;
+
+  static bool containsLogicalOp(const Expr *E) {
+    if (!E)
+      return false;
+    E = E->IgnoreParenImpCasts();
+    if (const auto *BO = dyn_cast<BinaryOperator>(E)) {
+      if (BO->isLogicalOp())
+        return true;
+      return containsLogicalOp(BO->getLHS()) || containsLogicalOp(BO->getRHS());
+    }
+    // Also walk conditional operator children defensively
+    if (const auto *CO = dyn_cast<ConditionalOperator>(E)) {
+      return containsLogicalOp(CO->getCond()) ||
+             containsLogicalOp(CO->getTrueExpr()) ||
+             containsLogicalOp(CO->getFalseExpr());
+    }
+    return false;
+  }
 
 public:
   IfInstrumentVisitor(Rewriter &R)
@@ -68,6 +87,10 @@ public:
     auto Cond = If->getCond();
     if (!Cond)
       return true;
+    // If condition contains logical ops, skip whole-cond wrap; operands will be
+    // wrapped.
+    if (containsLogicalOp(Cond))
+      return true;
     SourceLocation SL = Cond->getBeginLoc();
     if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
       return true;
@@ -84,6 +107,8 @@ public:
   bool VisitWhileStmt(WhileStmt *WS) {
     Expr *Cond = WS->getCond();
     if (!Cond)
+      return true;
+    if (containsLogicalOp(Cond))
       return true;
     SourceLocation SL = Cond->getBeginLoc();
     if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
@@ -102,6 +127,8 @@ public:
     Expr *Cond = FS->getCond();
     if (!Cond)
       return true; // for(;;) has no condition
+    if (containsLogicalOp(Cond))
+      return true;
     SourceLocation SL = Cond->getBeginLoc();
     if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
       return true;
@@ -119,6 +146,8 @@ public:
     Expr *Cond = DS->getCond();
     if (!Cond)
       return true;
+    if (containsLogicalOp(Cond))
+      return true;
     SourceLocation SL = Cond->getBeginLoc();
     if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
       return true;
@@ -135,6 +164,8 @@ public:
   bool VisitConditionalOperator(ConditionalOperator *CO) {
     Expr *Cond = CO->getCond();
     if (!Cond)
+      return true;
+    if (containsLogicalOp(Cond))
       return true;
     SourceLocation SL = Cond->getBeginLoc();
     if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
@@ -193,7 +224,7 @@ public:
     std::string File = SM.getFilename(ForLoc).str();
     std::string LogStmt = std::string("BrInfo::Runtime::LogCond(") +
                           BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
-                          "\", " + std::to_string(Line) + ", true);\n";
+                          "\", " + std::to_string(Line) + ", true);";
 
     Stmt *Body = FR->getBody();
     if (isa<CompoundStmt>(Body)) {
@@ -222,6 +253,103 @@ public:
     bool Res = RecursiveASTVisitor::TraverseSwitchStmt(SS);
     SwitchStack.pop_back();
     return Res;
+  }
+
+  bool TraverseIfStmt(IfStmt *S) {
+    if (!S)
+      return true;
+    if (!RecursiveASTVisitor::WalkUpFromIfStmt(S))
+      return false;
+    RecursiveASTVisitor::TraverseStmt(S->getInit());
+    if (auto *VD = S->getConditionVariable())
+      RecursiveASTVisitor::TraverseDecl(VD);
+    ++CondDepth;
+    RecursiveASTVisitor::TraverseStmt(S->getCond());
+    --CondDepth;
+    RecursiveASTVisitor::TraverseStmt(S->getThen());
+    RecursiveASTVisitor::TraverseStmt(S->getElse());
+    return true;
+  }
+
+  bool TraverseWhileStmt(WhileStmt *S) {
+    if (!S)
+      return true;
+    if (!RecursiveASTVisitor::WalkUpFromWhileStmt(S))
+      return false;
+    ++CondDepth;
+    RecursiveASTVisitor::TraverseStmt(S->getCond());
+    --CondDepth;
+    RecursiveASTVisitor::TraverseStmt(S->getBody());
+    return true;
+  }
+
+  bool TraverseForStmt(ForStmt *S) {
+    if (!S)
+      return true;
+    if (!RecursiveASTVisitor::WalkUpFromForStmt(S))
+      return false;
+    RecursiveASTVisitor::TraverseStmt(S->getInit());
+    if (Stmt *Cond = S->getCond()) {
+      ++CondDepth;
+      RecursiveASTVisitor::TraverseStmt(Cond);
+      --CondDepth;
+    }
+    RecursiveASTVisitor::TraverseStmt(S->getInc());
+    RecursiveASTVisitor::TraverseStmt(S->getBody());
+    return true;
+  }
+
+  bool TraverseDoStmt(DoStmt *S) {
+    if (!S)
+      return true;
+    if (!RecursiveASTVisitor::WalkUpFromDoStmt(S))
+      return false;
+    RecursiveASTVisitor::TraverseStmt(S->getBody());
+    ++CondDepth;
+    RecursiveASTVisitor::TraverseStmt(S->getCond());
+    --CondDepth;
+    return true;
+  }
+
+  bool TraverseConditionalOperator(ConditionalOperator *S) {
+    if (!S)
+      return true;
+    if (!RecursiveASTVisitor::WalkUpFromConditionalOperator(S))
+      return false;
+    ++CondDepth;
+    RecursiveASTVisitor::TraverseStmt(S->getCond());
+    --CondDepth;
+    RecursiveASTVisitor::TraverseStmt(S->getTrueExpr());
+    RecursiveASTVisitor::TraverseStmt(S->getFalseExpr());
+    return true;
+  }
+
+  bool VisitBinaryOperator(BinaryOperator *BO) {
+    if (CondDepth <= 0)
+      return true;
+    if (!BO->isLogicalOp())
+      return true;
+    // For each operand that is not itself a logical op, wrap it.
+    auto wrapOperand = [&](Expr *Op) {
+      Expr *E = Op->IgnoreParenImpCasts();
+      if (auto *Inner = dyn_cast<BinaryOperator>(E)) {
+        if (Inner->isLogicalOp())
+          return; // will be handled at its own visit
+      }
+      SourceLocation SL = E->getBeginLoc();
+      if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
+        return;
+      unsigned Line = SM.getSpellingLineNumber(SL);
+      std::string Prefix = std::string("BrInfo::Runtime::LogCond(") +
+                           BrInfo::toHex64(CurrentFuncHash) + ", \"" +
+                           SM.getFilename(SL).str() + "\", " +
+                           std::to_string(Line) + ", (bool)(";
+      R.InsertText(E->getBeginLoc(), Prefix, true, true);
+      R.InsertTextAfterToken(E->getEndLoc(), "))");
+    };
+    wrapOperand(BO->getLHS());
+    wrapOperand(BO->getRHS());
+    return true;
   }
 };
 
