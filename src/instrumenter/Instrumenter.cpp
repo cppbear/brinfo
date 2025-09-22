@@ -185,6 +185,29 @@ public:
     return true;
   }
 
+  bool VisitCXXForRangeStmt(CXXForRangeStmt *FR) {
+    SourceLocation ForLoc = FR->getForLoc();
+    if (ForLoc.isInvalid() || !SM.isWrittenInMainFile(ForLoc))
+      return true;
+    unsigned Line = SM.getSpellingLineNumber(ForLoc);
+    std::string File = SM.getFilename(ForLoc).str();
+    std::string LogStmt = std::string("BrInfo::Runtime::LogCond(") +
+                          BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
+                          "\", " + std::to_string(Line) + ", true);\n";
+
+    Stmt *Body = FR->getBody();
+    if (isa<CompoundStmt>(Body)) {
+      // Insert just after '{'
+      R.InsertTextAfterToken(Body->getBeginLoc(), LogStmt);
+    } else {
+      // Wrap single statement body into a compound and prepend our log
+      R.InsertText(Body->getBeginLoc(), std::string("{ ") + LogStmt, true,
+                   true);
+      R.InsertTextAfterToken(Body->getEndLoc(), " }");
+    }
+    return true;
+  }
+
   bool TraverseSwitchStmt(SwitchStmt *SS) {
     // Compute condition location to match meta's line/file for case/default
     SwitchCtx Ctx;
