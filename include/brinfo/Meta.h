@@ -19,6 +19,7 @@ struct ConditionMeta {
   std::string File;
   unsigned Line = 0;
   std::string CondNorm;
+  std::string Kind; // textual kind (IF, CASE, DEFAULT, LOOP, TRY, etc.)
   uint64_t Hash = 0; // hash(File + ":" + Line + ":" + CondNorm)
 };
 
@@ -67,7 +68,8 @@ private:
                                 const std::string &Cond);
 
   static uint32_t getOrCreateConditionId(const std::string &File, unsigned Line,
-                                         const std::string &CondNorm);
+                                         const std::string &CondNorm,
+                                         const std::string &Kind);
   static uint32_t getOrCreateFunctionId(uint64_t FuncHash,
                                         const std::string &Signature,
                                         const std::string &Name,

@@ -190,7 +190,7 @@ public:
     R.InsertText(Cond->getBeginLoc(), Inject, true, true);
     std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
                          "\", " + BrInfo::toHex64(H) + ", " +
-                         (Flip ? "true" : "false") + ")";
+                         (Flip ? "true" : "false") + ", \"IF\")";
     R.InsertTextAfterToken(Cond->getEndLoc(), Suffix);
     return true;
   }
@@ -214,7 +214,7 @@ public:
     R.InsertText(Cond->getBeginLoc(), Inject, true, true);
     std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
                          "\", " + BrInfo::toHex64(H) + ", " +
-                         (Flip ? "true" : "false") + ")";
+                         (Flip ? "true" : "false") + ", \"LOOP\")";
     R.InsertTextAfterToken(Cond->getEndLoc(), Suffix);
     return true;
   }
@@ -238,7 +238,7 @@ public:
     R.InsertText(Cond->getBeginLoc(), Inject, true, true);
     std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
                          "\", " + BrInfo::toHex64(H) + ", " +
-                         (Flip ? "true" : "false") + ")";
+                         (Flip ? "true" : "false") + ", \"LOOP\")";
     R.InsertTextAfterToken(Cond->getEndLoc(), Suffix);
     return true;
   }
@@ -262,7 +262,7 @@ public:
     R.InsertText(Cond->getBeginLoc(), Inject, true, true);
     std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
                          "\", " + BrInfo::toHex64(H) + ", " +
-                         (Flip ? "true" : "false") + ")";
+                         (Flip ? "true" : "false") + ", \"LOOP\")";
     R.InsertTextAfterToken(Cond->getEndLoc(), Suffix);
     return true;
   }
@@ -286,7 +286,7 @@ public:
     R.InsertText(Cond->getBeginLoc(), Inject, true, true);
     std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
                          "\", " + BrInfo::toHex64(H) + ", " +
-                         (Flip ? "true" : "false") + ")";
+                         (Flip ? "true" : "false") + ", \"IF\")";
     R.InsertTextAfterToken(Cond->getEndLoc(), Suffix);
     return true;
   }
@@ -312,7 +312,7 @@ public:
                            BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
                            "\", " + std::to_string(Line) + ", true, \"" +
                            escapeForCxxString(Norm) + "\", " +
-                           BrInfo::toHex64(H) + ", false);";
+                           BrInfo::toHex64(H) + ", false, \"CASE\");";
       R.InsertTextAfterToken(Colon, Inject);
     }
     return true;
@@ -350,7 +350,7 @@ public:
                            BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
                            "\", " + std::to_string(Line) + ", true, \"" +
                            escapeForCxxString(Norm) + "\", " +
-                           BrInfo::toHex64(H) + ", false);";
+                           BrInfo::toHex64(H) + ", false, \"DEFAULT\");";
       R.InsertTextAfterToken(Colon, Inject);
     }
     return true;
@@ -378,7 +378,7 @@ public:
                           BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
                           "\", " + std::to_string(Line) + ", true, \"" +
                           escapeForCxxString(Norm) + "\", " +
-                          BrInfo::toHex64(H) + ", false);";
+                          BrInfo::toHex64(H) + ", false, \"LOOP\");";
 
     Stmt *Body = FR->getBody();
     if (isa<CompoundStmt>(Body)) {
@@ -526,9 +526,12 @@ public:
                            BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
                            "\", " + std::to_string(Line) + ", (bool)(";
       R.InsertText(E->getBeginLoc(), Prefix, true, true);
+      // std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
+      //                      "\", " + BrInfo::toHex64(H) + ", " +
+      //                      (Flip ? "true" : "false") + ", \"LOGIC\")";
       std::string Suffix = std::string(") , \"") + escapeForCxxString(Norm) +
                            "\", " + BrInfo::toHex64(H) + ", " +
-                           (Flip ? "true" : "false") + ")";
+                           (Flip ? "true" : "false") + ", \"IF\")";
       R.InsertTextAfterToken(E->getEndLoc(), Suffix);
     };
     wrapOperand(BO->getLHS());

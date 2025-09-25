@@ -19,8 +19,10 @@ void Init(const char *path = nullptr);
 // When normalization flips polarity (e.g., '!=' -> '==', '!X' -> 'X'),
 // pass normFlip=true. The 'value' should already reflect the normalized
 // condition's evaluation; normFlip is recorded for trace transparency.
+// condKind: textual kind (e.g. "IF","CASE","DEFAULT","LOOP","TRY","LOGIC")
 bool LogCond(uint64_t funcHash, const char *file, unsigned line, bool value,
-             const char *condNorm, uint64_t condHash, bool normFlip);
+             const char *condNorm, uint64_t condHash, bool normFlip,
+             const char *condKind);
 
 } // namespace Runtime
 } // namespace BrInfo

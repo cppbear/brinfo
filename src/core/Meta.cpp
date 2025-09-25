@@ -48,7 +48,8 @@ uint64_t MetaCollector::conditionHash(const std::string &File, unsigned Line,
 
 uint32_t MetaCollector::getOrCreateConditionId(const std::string &File,
                                                unsigned Line,
-                                               const std::string &CondNorm) {
+                                               const std::string &CondNorm,
+                                               const std::string &Kind) {
   std::string Key = File + "#" + std::to_string(Line) + "#" + CondNorm;
   auto It = ConditionKey2Id.find(Key);
   if (It != ConditionKey2Id.end())
@@ -59,6 +60,7 @@ uint32_t MetaCollector::getOrCreateConditionId(const std::string &File,
   Meta.File = File;
   Meta.Line = Line;
   Meta.CondNorm = CondNorm;
+  Meta.Kind = Kind;
   Meta.Hash = conditionHash(File, Line, CondNorm);
   Conditions.push_back(Meta);
   ConditionKey2Id[Key] = NewId;
@@ -135,7 +137,26 @@ void MetaCollector::recordFunction(
       bool Val = CS.Flag;
       if (CS.Condition->isNot())
         Val = !Val;
-      uint32_t Cid = getOrCreateConditionId(FilePath, Line, CondNorm);
+      // map CondKind enum to string
+      std::string KindStr;
+      switch (CS.Condition->getKind()) {
+      case BaseCond::IF:
+        KindStr = "IF";
+        break;
+      case BaseCond::CASE:
+        KindStr = "CASE";
+        break;
+      case BaseCond::DEFAULT:
+        KindStr = "DEFAULT";
+        break;
+      case BaseCond::LOOP:
+        KindStr = "LOOP";
+        break;
+      case BaseCond::TRY:
+        KindStr = "TRY";
+        break;
+      };
+      uint32_t Cid = getOrCreateConditionId(FilePath, Line, CondNorm, KindStr);
       Entry.Sequence.push_back({Cid, Val});
       // record in function meta set
       Functions[FuncId].ConditionIds.insert(Cid);
@@ -162,6 +183,7 @@ void MetaCollector::dumpAll(const std::string &ProjectRoot) {
                                    {"file", C.File},
                                    {"line", C.Line},
                                    {"cond_norm", C.CondNorm},
+                                   {"kind", C.Kind},
                                    {"hash", toHex64(C.Hash)}});
   }
   // functions

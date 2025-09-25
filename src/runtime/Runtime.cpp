@@ -36,6 +36,12 @@ std::string NowISO8601() {
   return std::string(Buf);
 }
 
+std::string toHex64(uint64_t V) {
+  std::ostringstream os;
+  os << "0x" << std::hex << std::setw(16) << std::setfill('0') << V;
+  return os.str();
+}
+
 } // namespace
 
 static void DoInit(const char *path) {
@@ -58,31 +64,28 @@ void Init(const char *path) {
 
 static void WriteJson(uint64_t funcHash, const char *file, unsigned line,
                       bool value, const char *condNorm,
-                      const uint64_t *condHashOpt, const bool *normFlipOpt) {
+                      const uint64_t *condHash, const bool *normFlip,
+                      const char *condKind) {
   LogFile() << "{\"ts\":\"" << NowISO8601() << "\",";
   LogFile() << "\"type\":\"cond\",";
-  LogFile() << "\"func\":\"0x" << std::hex << funcHash << std::dec << "\",";
+  LogFile() << "\"func\":\"" << toHex64(funcHash) << "\",";
+  LogFile() << "\"cond_hash\":\"" << toHex64(*condHash) << "\",";
   LogFile() << "\"file\":\"" << (file ? file : "") << "\",";
   LogFile() << "\"line\":" << line << ",";
-  LogFile() << "\"val\":" << (value ? 1 : 0);
-  if (condNorm) {
-    LogFile() << ",\"cond_norm\":\"" << condNorm << "\"";
-  }
-  if (condHashOpt) {
-    LogFile() << ",\"cond_hash\":\"0x" << std::hex << *condHashOpt << std::dec
-              << "\"";
-  }
-  if (normFlipOpt) {
-    LogFile() << ",\"norm_flip\":" << (*normFlipOpt ? 1 : 0);
-  }
+  LogFile() << "\"cond_norm\":\"" << condNorm << "\",";
+  LogFile() << "\"cond_kind\":\"" << condKind << "\",";
+  LogFile() << "\"val\":" << (value ? 1 : 0) << ",";
+  LogFile() << "\"norm_flip\":" << (*normFlip ? 1 : 0);
   LogFile() << "}\n";
 }
 
 bool LogCond(uint64_t funcHash, const char *file, unsigned line, bool value,
-             const char *condNorm, uint64_t condHash, bool normFlip) {
+             const char *condNorm, uint64_t condHash, bool normFlip,
+             const char *condKind) {
   std::call_once(InitOnce(), []() { DoInit(nullptr); });
   std::lock_guard<std::mutex> lock(FileMutex());
-  WriteJson(funcHash, file, line, value, condNorm, &condHash, &normFlip);
+  WriteJson(funcHash, file, line, value, condNorm, &condHash, &normFlip,
+            condKind);
   LogFile().flush();
   return value;
 }
