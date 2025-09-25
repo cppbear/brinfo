@@ -6,6 +6,7 @@
 #include "clang/Basic/SourceManager.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
+#include <iostream>
 #include <sstream>
 #include <stack>
 
@@ -470,6 +471,20 @@ void Analysis::dfsTraverseCFGLoop(long Parent, CFGBlock *FirstBlk) {
         const Stmt *InnerCond = Blk->getTerminatorCondition();
         if (InnerCond) {
           Cond = new LoopCond(cast<Expr>(InnerCond)->IgnoreParenImpCasts());
+          if (Terminator->getStmtClass() == Stmt::CXXForRangeStmtClass) {
+            std::string Norm;
+            if (const Expr *Init =
+                    cast<CXXForRangeStmt>(Terminator)->getRangeInit()) {
+              llvm::raw_string_ostream OS(Norm);
+              Init->printPretty(OS, nullptr, Context->getPrintingPolicy());
+              OS.flush();
+              rtrim(Norm);
+              Norm = std::string("range_for:") + Norm;
+            } else {
+              Norm = "range_for";
+            }
+            Cond->setCondStr(Norm);
+          }
         }
         const CFGBlock::AdjacentBlock *Adj = Blk->succ_begin();
         if (InnerCond) {

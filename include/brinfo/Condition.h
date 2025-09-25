@@ -1,6 +1,7 @@
 #pragma once
 
 #include "clang/Analysis/CFG.h"
+#include <string>
 
 using namespace clang;
 using namespace llvm;
@@ -50,12 +51,12 @@ public:
   vector<const DeclRefExpr *> &getDeclRefExprList() { return DeclRefExprList; }
   vector<const CallExpr *> &getCallExprList() { return CallExprList; }
   virtual void setCondStr(const ASTContext *Context);
+  virtual void setCondStr(const string &Str) { CondStr = Str; }
 };
 
 class IfCond : public BaseCond {
 public:
-  IfCond(const Stmt *Cond) : BaseCond(IF, Cond) {
-  }
+  IfCond(const Stmt *Cond) : BaseCond(IF, Cond) {}
   virtual ~IfCond() {}
   void dump(const ASTContext *Context) override;
   string toString(const ASTContext *Context) override;
@@ -67,8 +68,7 @@ class CaseCond : public BaseCond {
 
 public:
   CaseCond(const Stmt *Cond, const Stmt *Case)
-      : BaseCond(CASE, Cond), Case(Case) {
-  }
+      : BaseCond(CASE, Cond), Case(Case) {}
   virtual ~CaseCond() { Case = nullptr; }
   void dump(const ASTContext *Context) override;
   void setCondStr(const ASTContext *Context) override;
@@ -81,8 +81,7 @@ class DefaultCond : public BaseCond {
 
 public:
   DefaultCond(const Stmt *Cond, vector<const Stmt *> Cases)
-      : BaseCond(DEFAULT, Cond), Cases(Cases) {
-  }
+      : BaseCond(DEFAULT, Cond), Cases(Cases) {}
   virtual ~DefaultCond() {}
   void dump(const ASTContext *Context) override;
   void setCondStr(const ASTContext *Context) override;
@@ -94,8 +93,7 @@ public:
 
 class LoopCond : public BaseCond {
 public:
-  LoopCond(const Stmt *Cond) : BaseCond(LOOP, Cond) {
-  }
+  LoopCond(const Stmt *Cond) : BaseCond(LOOP, Cond) {}
   virtual ~LoopCond() {}
   void dump(const ASTContext *Context) override;
   string toString(const ASTContext *Context) override;

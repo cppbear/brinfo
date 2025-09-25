@@ -3,6 +3,7 @@
 #include <clang/AST/RecursiveASTVisitor.h>
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/FrontendActions.h>
+#include <clang/Lex/Lexer.h>
 #include <clang/Rewrite/Core/Rewriter.h>
 #include <clang/Tooling/CommonOptionsParser.h>
 #include <clang/Tooling/Tooling.h>
@@ -15,7 +16,7 @@ using namespace clang;
 using namespace clang::tooling;
 using namespace llvm;
 
-static cl::OptionCategory InstrCat("brinfo-instrument options");
+static cl::OptionCategory InstrCat("brinfo-inst options");
 static cl::opt<std::string> OutputPath("o", cl::desc("Output file path"),
                                        cl::value_desc("file"),
                                        cl::cat(InstrCat));
@@ -387,7 +388,11 @@ public:
       // Wrap single statement body into a compound and prepend our log
       R.InsertText(Body->getBeginLoc(), std::string("{ ") + LogStmt, true,
                    true);
-      R.InsertTextAfterToken(Body->getEndLoc(), " }");
+      // Ensure we place the closing brace after the statement INCLUDING its
+      // trailing semicolon
+      SourceLocation AfterStmt =
+          Lexer::getLocForEndOfToken(Body->getEndLoc(), 0, SM, LO);
+      R.InsertTextAfterToken(AfterStmt, " }");
     }
     return true;
   }
