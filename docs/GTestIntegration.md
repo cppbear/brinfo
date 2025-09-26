@@ -99,3 +99,12 @@ target_link_libraries(my_tests PRIVATE gtest gtest_main brinfo_runtime)
 Notes:
 - If your project uses an out-of-tree include path for brinfo, adjust `target_include_directories` accordingly.
 - If you prefer include-order control per file, you can include `brinfo/GTestAutoWrap.h` before `<gtest/gtest.h>` instead of using `-include`.
+
+Tip: If you use the `brinfo_callwrap` rewriter on your test source and it performs any wrapping in a main-file, it will automatically inject once at the very top of that file:
+
+```
+#define BRINFO_AUTO_WRAP_GTEST
+#include "brinfo/GTestAutoWrap.h"
+#include "brinfo/GTestSupport.h"
+```
+This ensures assertion macros are auto-wrapped and the listener utilities are available.

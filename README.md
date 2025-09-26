@@ -1,6 +1,13 @@
 # BrInfo
 
-The tool is capable of analyzing the condition chains within specified C++ source files.
+BrInfo is a C++/Clang-based toolkit to correlate static control-flow conditions with runtime behavior in tests. It provides:
+
+- Static analysis/instrumentation to normalize and hash conditions (IF/CASE/DEFAULT/LOOP/TRY)
+- A lightweight runtime that emits NDJSON events: test, assertion, invocation, and condition
+- Google Test integration (listener + optional macro auto-wrap)
+- An AST rewriter to auto-wrap function calls in test bodies with `BRINFO_CALL(...)`
+
+End goal: extract per-assertion triples <test prefix, test oracle, condition chain> from your test runs.
 
 ## Prerequisites
 
@@ -10,7 +17,7 @@ If the project being analyzed is managed by CMake, you can generate this file by
 
 If the project is not managed by CMake, you can consider using [Bear](https://github.com/rizsotto/Bear) to generate the compilation database.
 
-## Usage
+## CLI: Static analyzer (brinfo)
 
 ```
 USAGE: brinfo [options] <source>
@@ -84,6 +91,30 @@ If no function/method is specified, all functions/methods in the `<source>` file
 
 The condition chains analyzed by the tool will be saved as JSON files with the filename format `*_req.json`. These files will be located in the `llm_reqs` folder within the analyzed project's directory.
 
+## Runtime and GTest integration
+
+- Include `brinfo/GTestSupport.h` in your tests to register the listener and to use `BRINFO_CALL(...)` around call sites you want to track.
+- To auto-wrap assertion macros so invocations inside assertions are marked `in_oracle`, enable auto-wrap by defining `BRINFO_AUTO_WRAP_GTEST` and including `brinfo/GTestAutoWrap.h` before `<gtest/gtest.h>`.
+- Alternatively, use the AST rewriter `brinfo_callwrap` to rewrite your test sources and insert `BRINFO_CALL(...)` automatically (with optional macro-argument wrapping).
+
+See docs/GTestIntegration.md and docs/CallWrapTool.md for details.
+
+## AST rewriter (brinfo_callwrap)
+
+This tool finds calls inside gtest TestBody and wraps them with `BRINFO_CALL(...)`. Flags:
+- `--only-tests` (default on): limit to TestBody
+- `--allow` regex: filter fully qualified callee names
+- `--wrap-macro-args`: also wrap calls inside assertion macro arguments (spelling in main file)
+- `--print-structure`, `--structure-all`, `--print-calls`: diagnostics/outline
+
+It also injects, once per modified main file, the header block:
+
+```
+#define BRINFO_AUTO_WRAP_GTEST
+#include "brinfo/GTestAutoWrap.h"
+#include "brinfo/GTestSupport.h"
+```
+
 ## Build
 
 1. Install the dependencies, including:
@@ -110,3 +141,13 @@ The condition chains analyzed by the tool will be saved as JSON files with the f
    cmake --build build
    cmake --install build
    ```
+
+   ## Documentation
+
+   - docs/GTestIntegration.md (How to attach Google Test context)
+   - docs/Runtime.md (Event model, field semantics, threading/context)
+   - docs/Instrumentation.md (Condition normalization, cond_kind, hashing)
+   - docs/CallWrapTool.md (AST rewriter flags and internals)
+   - docs/ReportExtractor.md (Offline rules to extract <prefix, oracle, cond_chain>)
+
+   Chinese versions are available with `.zh.md` suffix alongside the English docs.
