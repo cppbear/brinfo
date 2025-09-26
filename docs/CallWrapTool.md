@@ -1,5 +1,7 @@
 # Call Wrap Tool (brinfo_callwrap)
 
+[中文](./CallWrapTool.zh.md)
+
 This Clang-based rewriter wraps selected call expressions inside Google Test `TestBody` with `BRINFO_CALL(...)`.
 
 ## Key behaviors

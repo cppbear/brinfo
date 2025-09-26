@@ -1,5 +1,7 @@
 # BrInfo
 
+[English](./README.md)
+
 BrInfo 是一个基于 C++/Clang 的工具集，用于将静态控制流条件与测试运行时行为进行关联。主要能力包括：
 
 - 静态分析/插桩：对条件（IF/CASE/DEFAULT/LOOP/TRY）进行规范化和哈希

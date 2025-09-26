@@ -1,5 +1,7 @@
 # 运行时事件（Runtime Events）
 
+[English](./Runtime.md)
+
 BrInfo 以 NDJSON 事件的形式输出测试、断言、调用与条件，便于离线归并与分析。
 
 ## 事件类型

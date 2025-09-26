@@ -1,5 +1,7 @@
 # Runtime Events
 
+[中文](./Runtime.zh.md)
+
 BrInfo emits NDJSON events to correlate tests, assertions, invocations, and runtime conditions.
 
 ## Event types

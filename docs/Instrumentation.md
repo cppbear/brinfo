@@ -1,5 +1,7 @@
 # Instrumentation and Condition Normalization
 
+[中文](./Instrumentation.zh.md)
+
 BrInfo instruments conditionals to log normalized predicates consistently at runtime.
 
 ## Condition kinds

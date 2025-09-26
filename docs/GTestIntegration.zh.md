@@ -1,5 +1,7 @@
 # BrInfo 的 Google Test 集成
 
+[English](./GTestIntegration.md)
+
 本文说明如何将 Google Test 上下文（测试用例、断言）与运行时条件日志关联，从而把（前缀、预言）映射到静态条件链。
 
 前置：测试二进制需链接 `brinfo` 运行时，并能包含 `brinfo/GTestSupport.h`。

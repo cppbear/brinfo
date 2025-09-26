@@ -1,5 +1,7 @@
 # 插桩与条件规范化
 
+[English](./Instrumentation.md)
+
 BrInfo 在关键条件点插入记录语句，统一在运行时输出规范化后的谓词，以便与静态结果对齐。
 
 ## 条件类型（cond_kind）

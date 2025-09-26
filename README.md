@@ -1,5 +1,7 @@
 # BrInfo
 
+[中文说明](./README.zh.md)
+
 BrInfo is a C++/Clang-based toolkit to correlate static control-flow conditions with runtime behavior in tests. It provides:
 
 - Static analysis/instrumentation to normalize and hash conditions (IF/CASE/DEFAULT/LOOP/TRY)

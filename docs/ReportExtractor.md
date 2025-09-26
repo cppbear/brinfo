@@ -1,5 +1,7 @@
 # Offline Report Extractor (Design)
 
+[中文](./ReportExtractor.zh.md)
+
 Goal: produce per-assertion triples <prefix, oracle, cond_chain> from NDJSON logs (and optionally meta files).
 
 ## Inputs
