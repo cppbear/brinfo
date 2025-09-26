@@ -19,7 +19,7 @@ struct ConditionMeta {
   std::string File;
   unsigned Line = 0;
   std::string CondNorm;
-  std::string Kind; // textual kind (IF, CASE, DEFAULT, LOOP, TRY, etc.)
+  std::string Kind;  // textual kind (IF, CASE, DEFAULT, LOOP, TRY, etc.)
   uint64_t Hash = 0; // hash(File + ":" + Line + ":" + CondNorm)
 };
 

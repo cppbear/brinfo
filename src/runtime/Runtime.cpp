@@ -1,14 +1,14 @@
 #include "brinfo/Runtime.h"
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <mutex>
-#include <string>
-#include <atomic>
-#include <vector>
-#include <sstream>
 #include <iomanip>
+#include <mutex>
+#include <sstream>
+#include <string>
+#include <vector>
 
 namespace BrInfo {
 namespace Runtime {
@@ -313,8 +313,9 @@ void EndInvocation(const char *status) {
     return;
   }
   auto end = std::chrono::steady_clock::now();
-  uint64_t dur = (uint64_t)
-      std::chrono::duration_cast<std::chrono::milliseconds>(end - F.start)
+  uint64_t dur =
+      (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(end -
+                                                                      F.start)
           .count();
   EmitInvocationEnd(F, status ? status : "OK", dur);
   LogFile().flush();
