@@ -82,3 +82,16 @@ target_link_libraries(brinfo_inst PRIVATE
 
 install(TARGETS brinfo_inst
   RUNTIME DESTINATION bin)
+
+add_executable(brinfo_callwrap
+  src/rewrite/AutoWrapInvocations.cpp
+)
+target_link_libraries(brinfo_callwrap PRIVATE
+  clangFrontend
+  clangTooling
+  clangRewrite
+)
+target_include_directories(brinfo_callwrap PRIVATE include)
+
+install(TARGETS brinfo_callwrap
+  RUNTIME DESTINATION bin)
