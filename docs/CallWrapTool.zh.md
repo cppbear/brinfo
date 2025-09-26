@@ -21,7 +21,6 @@
 - `--only-tests[=true|false]`
 - `--main-file-only[=true|false]`
 - `--wrap-macro-args`
-- 诊断：`--print-structure`、`--structure-all`、`--print-calls`
 
 ## 安全与限制
 

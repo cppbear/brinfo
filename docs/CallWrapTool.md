@@ -21,7 +21,6 @@ This Clang-based rewriter wraps selected call expressions inside Google Test `Te
 - `--only-tests[=true|false]`
 - `--main-file-only[=true|false]`
 - `--wrap-macro-args`
-- Diagnostics: `--print-structure`, `--structure-all`, `--print-calls`
 
 ## Safety and limits
 
