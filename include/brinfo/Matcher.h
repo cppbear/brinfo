@@ -62,9 +62,9 @@ public:
         if (!Flag)
           return;
         if (DumpCFG)
-          dumpCFGToDot(Cfg.get(), Result.Context->getLangOpts(), RealProjectPath,
-                            Analyzer.getSignature(),
-                            Func->getNameAsString());
+          dumpCFGToDot(Cfg.get(), Result.Context->getLangOpts(),
+                       RealProjectPath, Analyzer.getSignature(),
+                       Func->getNameAsString());
         Analyzer.analyze();
       }
     }

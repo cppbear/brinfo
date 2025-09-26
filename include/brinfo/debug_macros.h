@@ -19,7 +19,7 @@ using namespace llvm;
 #endif
 
 #ifdef DEBUG
-#define DEBUG_EXEC(...)                                                     \
+#define DEBUG_EXEC(...)                                                        \
   do {                                                                         \
     __VA_ARGS__;                                                               \
   } while (0)
