@@ -99,7 +99,7 @@ The condition chains analyzed by the tool will be saved as JSON files with the f
 - To auto-wrap assertion macros so invocations inside assertions are marked `in_oracle`, enable auto-wrap by defining `BRINFO_AUTO_WRAP_GTEST` and including `brinfo/GTestAutoWrap.h` before `<gtest/gtest.h>`.
 - Alternatively, use the AST rewriter `brinfo_callwrap` to rewrite your test sources and insert `BRINFO_CALL(...)` automatically (with optional macro-argument wrapping).
 
-See docs/GTestIntegration.md and docs/CallWrapTool.md for details.
+See [docs/GTestIntegration.md](./docs/GTestIntegration.md) and [docs/CallWrapTool.md](./docs/CallWrapTool.md) for details.
 
 ## AST rewriter (brinfo_callwrap)
 
@@ -146,10 +146,10 @@ It also injects, once per modified main file, the header block:
 
    ## Documentation
 
-   - docs/GTestIntegration.md (How to attach Google Test context)
-   - docs/Runtime.md (Event model, field semantics, threading/context)
-   - docs/Instrumentation.md (Condition normalization, cond_kind, hashing)
-   - docs/CallWrapTool.md (AST rewriter flags and internals)
-   - docs/ReportExtractor.md (Offline rules to extract <prefix, oracle, cond_chain>)
+   - [docs/GTestIntegration.md](./docs/GTestIntegration.md) (How to attach Google Test context)
+   - [docs/Runtime.md](./docs/Runtime.md) (Event model, field semantics, threading/context)
+   - [docs/Instrumentation.md](./docs/Instrumentation.md) (Condition normalization, cond_kind, hashing)
+   - [docs/CallWrapTool.md](./docs/CallWrapTool.md) (AST rewriter flags and internals)
+   - [docs/ReportExtractor.md](./docs/ReportExtractor.md) (Offline rules to extract <prefix, oracle, cond_chain>)
 
    Chinese versions are available with `.zh.md` suffix alongside the English docs.

@@ -21,7 +21,7 @@ BrInfo 是一个基于 C++/Clang 的工具集，用于将静态控制流条件�
 - 如果希望断言宏内部的调用自动标注 `in_oracle`，请定义 `BRINFO_AUTO_WRAP_GTEST` 并在 `<gtest/gtest.h>` 之前包含 `brinfo/GTestAutoWrap.h`。
 - 或者，使用 AST 重写器 `brinfo_callwrap` 自动重写测试源码（可选支持宏参数内的调用包装）。
 
-详见 docs/GTestIntegration.zh.md 与 docs/CallWrapTool.zh.md。
+详见 [docs/GTestIntegration.zh.md](./docs/GTestIntegration.zh.md) 与 [docs/CallWrapTool.zh.md](./docs/CallWrapTool.zh.md)。
 
 ## AST 重写器（brinfo_callwrap）
 
@@ -45,8 +45,8 @@ BrInfo 是一个基于 C++/Clang 的工具集，用于将静态控制流条件�
 
 ## 文档
 
-- docs/GTestIntegration.zh.md（如何绑定 Google Test 上下文）
-- docs/Runtime.zh.md（事件模型、字段语义、线程/上下文）
-- docs/Instrumentation.zh.md（条件规范化、cond_kind、hash）
-- docs/CallWrapTool.zh.md（AST 重写工具参数与原理）
-- docs/ReportExtractor.zh.md（三元组 <prefix, oracle, cond_chain> 的离线提取规则）
+- [docs/GTestIntegration.zh.md](./docs/GTestIntegration.zh.md)（如何绑定 Google Test 上下文）
+- [docs/Runtime.zh.md](./docs/Runtime.zh.md)（事件模型、字段语义、线程/上下文）
+- [docs/Instrumentation.zh.md](./docs/Instrumentation.zh.md)（条件规范化、cond_kind、hash）
+- [docs/CallWrapTool.zh.md](./docs/CallWrapTool.zh.md)（AST 重写工具参数与原理）
+- [docs/ReportExtractor.zh.md](./docs/ReportExtractor.zh.md)（三元组 <prefix, oracle, cond_chain> 的离线提取规则）
