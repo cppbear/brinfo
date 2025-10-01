@@ -144,29 +144,18 @@ public:
     return Result;
   }
 
-  bool VisitCallExpr(CallExpr *CE) {
-    // Skip in system headers / macros
+  // Post-order wrapping: visit children first, then wrap this call
+  bool TraverseCallExpr(CallExpr *CE) {
+    if (!RecursiveASTVisitor::TraverseCallExpr(CE))
+      return false;
+    return wrapCall(CE);
+  }
+
+  bool wrapCall(CallExpr *CE) {
     const SourceManager &SM = Ctx.getSourceManager();
     SourceLocation Loc = CE->getExprLoc();
     if (Loc.isInvalid() || SM.isInSystemHeader(Loc))
       return true;
-
-    // If inside a macro, optionally allow rewriting macro argument expression
-    if (Loc.isMacroID()) {
-      llvm::StringRef MacroName =
-          Lexer::getImmediateMacroName(Loc, SM, Ctx.getLangOpts());
-      // Idempotency: if we're already inside BRINFO_CALL macro, skip
-      if (MacroName == "BRINFO_CALL") {
-        return true;
-      }
-      if (!WrapMacroArgs)
-        return true;
-      // Require the spelling location to be in the main file so we don't edit
-      // headers
-      SourceLocation SpellLoc = SM.getSpellingLoc(Loc);
-      if (!SM.isWrittenInMainFile(SpellLoc))
-        return true;
-    }
 
     // Optional: limit to gtest TestBody
     if (OnlyTests && !InTestBody)
@@ -180,35 +169,59 @@ public:
     if (AllowRegex.getNumOccurrences() && !std::regex_search(QName, Allow))
       return true;
 
-    // Get a rewritable source range for the call expression.
     const LangOptions &LO = Ctx.getLangOpts();
     CharSourceRange TokRange =
         CharSourceRange::getTokenRange(CE->getSourceRange());
-    // Try to materialize a file character range even across macro boundaries
-    CharSourceRange Range = Lexer::makeFileCharRange(TokRange, SM, LO);
-    if (Range.isInvalid()) {
-      // Fallback: build from spelling locations
+
+    // Build a precise character range for replacement.
+    CharSourceRange Range;
+    if (Loc.isMacroID()) {
+      // Inside macro: only wrap if enabled and spelled in main file.
+      llvm::StringRef MacroName = Lexer::getImmediateMacroName(Loc, SM, LO);
+      if (MacroName == "BRINFO_CALL")
+        return true; // already inside wrapper
+      if (!WrapMacroArgs)
+        return true;
       SourceLocation B = SM.getSpellingLoc(TokRange.getBegin());
       SourceLocation EToken = SM.getSpellingLoc(TokRange.getEnd());
+      if (!SM.isWrittenInMainFile(B))
+        return true;
       SourceLocation E = Lexer::getLocForEndOfToken(EToken, 0, SM, LO);
       Range = CharSourceRange::getCharRange(B, E);
+    } else {
+      // Normal path: prefer a file char range
+      Range = Lexer::makeFileCharRange(TokRange, SM, LO);
+      if (Range.isInvalid()) {
+        SourceLocation B = SM.getSpellingLoc(TokRange.getBegin());
+        SourceLocation EToken = SM.getSpellingLoc(TokRange.getEnd());
+        SourceLocation E = Lexer::getLocForEndOfToken(EToken, 0, SM, LO);
+        Range = CharSourceRange::getCharRange(B, E);
+      }
     }
-    // Prevent double-wrapping if already under BRINFO_CALL in file text
-    if (isAlreadyWrapped(Range, SM)) {
-      return true;
-    }
-    llvm::StringRef Text = Lexer::getSourceText(Range, SM, LO);
-    if (Text.empty())
+
+    if (Range.isInvalid())
       return true;
 
-    // Build wrapped text: BRINFO_CALL(<original>)
-    std::string Wrapped = ("BRINFO_CALL(" + Text.str() + ")");
-    R.ReplaceText(Range, Wrapped);
-    // Mark main file as modified when the change applies to it
-    SourceLocation BFile = SM.getFileLoc(Range.getBegin());
-    if (SM.isWrittenInMainFile(BFile)) {
-      DidModifyMainFile = true;
+    // Prevent double-wrapping if already under BRINFO_CALL in file text
+    if (isAlreadyWrapped(Range, SM))
+      return true;
+
+    // Prefer rewritten text to include any prior inner-call wraps
+    std::string Curr = R.getRewrittenText(Range);
+    if (Curr.empty()) {
+      llvm::StringRef Orig = Lexer::getSourceText(Range, SM, LO);
+      Curr = Orig.str();
     }
+    if (Curr.empty())
+      return true;
+
+    std::string Wrapped = ("BRINFO_CALL(" + Curr + ")");
+    R.ReplaceText(Range, Wrapped);
+
+    SourceLocation BFile = SM.getFileLoc(Range.getBegin());
+    if (SM.isWrittenInMainFile(BFile))
+      DidModifyMainFile = true;
+
     return true;
   }
 
