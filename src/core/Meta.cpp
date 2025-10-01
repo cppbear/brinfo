@@ -132,6 +132,7 @@ void MetaCollector::recordFunction(
       if (S) {
         auto &SM = Context->getSourceManager();
         Line = SM.getSpellingLineNumber(S->getBeginLoc());
+        FilePath = SM.getFilename(S->getBeginLoc()).str();
       }
       std::string CondNorm = CS.Condition->getCondStr();
       bool Val = CS.Flag;

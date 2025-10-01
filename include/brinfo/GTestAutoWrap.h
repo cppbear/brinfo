@@ -138,87 +138,87 @@ struct AssertionScopeGuard {
       "ASSERT_GE", #a ", " #b,                                                 \
       ASSERT_PRED_FORMAT2(::testing::internal::CmpHelperGE, a, b))
 
-// Save originals for string and floating macros before redefining
-// These macros don't have convenient public predicate helpers with stable
-// signatures across gtest versions, so we invoke the original macro inside
-// our wrapper body. We alias them first to avoid recursive expansion.
-#define BRINFO__ORIG_EXPECT_STREQ EXPECT_STREQ
-#define BRINFO__ORIG_EXPECT_STRNE EXPECT_STRNE
-#define BRINFO__ORIG_EXPECT_STRCASEEQ EXPECT_STRCASEEQ
-#define BRINFO__ORIG_EXPECT_STRCASENE EXPECT_STRCASENE
-#define BRINFO__ORIG_ASSERT_STREQ ASSERT_STREQ
-#define BRINFO__ORIG_ASSERT_STRNE ASSERT_STRNE
-#define BRINFO__ORIG_ASSERT_STRCASEEQ ASSERT_STRCASEEQ
-#define BRINFO__ORIG_ASSERT_STRCASENE ASSERT_STRCASENE
-
-#define BRINFO__ORIG_EXPECT_FLOAT_EQ EXPECT_FLOAT_EQ
-#define BRINFO__ORIG_EXPECT_DOUBLE_EQ EXPECT_DOUBLE_EQ
-#define BRINFO__ORIG_EXPECT_NEAR EXPECT_NEAR
-#define BRINFO__ORIG_ASSERT_FLOAT_EQ ASSERT_FLOAT_EQ
-#define BRINFO__ORIG_ASSERT_DOUBLE_EQ ASSERT_DOUBLE_EQ
-#define BRINFO__ORIG_ASSERT_NEAR ASSERT_NEAR
-
 // Redefine C-string comparisons
 #undef EXPECT_STREQ
 #define EXPECT_STREQ(a, b)                                                     \
-  BRINFO__ASSERTION_WRAP("EXPECT_STREQ", #a ", " #b,                           \
-                         BRINFO__ORIG_EXPECT_STREQ(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "EXPECT_STREQ", #a ", " #b,                                              \
+      EXPECT_PRED_FORMAT2(::testing::internal::CmpHelperSTREQ, a, b))
 #undef EXPECT_STRNE
 #define EXPECT_STRNE(a, b)                                                     \
-  BRINFO__ASSERTION_WRAP("EXPECT_STRNE", #a ", " #b,                           \
-                         BRINFO__ORIG_EXPECT_STRNE(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "EXPECT_STRNE", #a ", " #b,                                              \
+      EXPECT_PRED_FORMAT2(::testing::internal::CmpHelperSTRNE, a, b))
 #undef EXPECT_STRCASEEQ
 #define EXPECT_STRCASEEQ(a, b)                                                 \
-  BRINFO__ASSERTION_WRAP("EXPECT_STRCASEEQ", #a ", " #b,                       \
-                         BRINFO__ORIG_EXPECT_STRCASEEQ(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "EXPECT_STRCASEEQ", #a ", " #b,                                          \
+      EXPECT_PRED_FORMAT2(::testing::internal::CmpHelperSTRCASEEQ, a, b))
 #undef EXPECT_STRCASENE
 #define EXPECT_STRCASENE(a, b)                                                 \
-  BRINFO__ASSERTION_WRAP("EXPECT_STRCASENE", #a ", " #b,                       \
-                         BRINFO__ORIG_EXPECT_STRCASENE(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "EXPECT_STRCASENE", #a ", " #b,                                          \
+      EXPECT_PRED_FORMAT2(::testing::internal::CmpHelperSTRCASENE, a, b))
 
 #undef ASSERT_STREQ
 #define ASSERT_STREQ(a, b)                                                     \
-  BRINFO__ASSERTION_WRAP("ASSERT_STREQ", #a ", " #b,                           \
-                         BRINFO__ORIG_ASSERT_STREQ(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "ASSERT_STREQ", #a ", " #b,                                              \
+      ASSERT_PRED_FORMAT2(::testing::internal::CmpHelperSTREQ, a, b))
 #undef ASSERT_STRNE
 #define ASSERT_STRNE(a, b)                                                     \
-  BRINFO__ASSERTION_WRAP("ASSERT_STRNE", #a ", " #b,                           \
-                         BRINFO__ORIG_ASSERT_STRNE(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "ASSERT_STRNE", #a ", " #b,                                              \
+      ASSERT_PRED_FORMAT2(::testing::internal::CmpHelperSTRNE, a, b))
 #undef ASSERT_STRCASEEQ
 #define ASSERT_STRCASEEQ(a, b)                                                 \
-  BRINFO__ASSERTION_WRAP("ASSERT_STRCASEEQ", #a ", " #b,                       \
-                         BRINFO__ORIG_ASSERT_STRCASEEQ(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "ASSERT_STRCASEEQ", #a ", " #b,                                          \
+      ASSERT_PRED_FORMAT2(::testing::internal::CmpHelperSTRCASEEQ, a, b))
 #undef ASSERT_STRCASENE
 #define ASSERT_STRCASENE(a, b)                                                 \
-  BRINFO__ASSERTION_WRAP("ASSERT_STRCASENE", #a ", " #b,                       \
-                         BRINFO__ORIG_ASSERT_STRCASENE(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "ASSERT_STRCASENE", #a ", " #b,                                          \
+      ASSERT_PRED_FORMAT2(::testing::internal::CmpHelperSTRCASENE, a, b))
 
 // Redefine floating comparisons (preserve original semantics)
 #undef EXPECT_FLOAT_EQ
 #define EXPECT_FLOAT_EQ(a, b)                                                  \
-  BRINFO__ASSERTION_WRAP("EXPECT_FLOAT_EQ", #a ", " #b,                        \
-                         BRINFO__ORIG_EXPECT_FLOAT_EQ(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "EXPECT_FLOAT_EQ", #a ", " #b,                                           \
+      EXPECT_PRED_FORMAT2(                                                     \
+          ::testing::internal::CmpHelperFloatingPointEQ<float>, a, b))
 #undef EXPECT_DOUBLE_EQ
 #define EXPECT_DOUBLE_EQ(a, b)                                                 \
-  BRINFO__ASSERTION_WRAP("EXPECT_DOUBLE_EQ", #a ", " #b,                       \
-                         BRINFO__ORIG_EXPECT_DOUBLE_EQ(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "EXPECT_DOUBLE_EQ", #a ", " #b,                                          \
+      EXPECT_PRED_FORMAT2(                                                     \
+          ::testing::internal::CmpHelperFloatingPointEQ<double>, a, b))
 #undef EXPECT_NEAR
 #define EXPECT_NEAR(a, b, abs_error)                                           \
-  BRINFO__ASSERTION_WRAP("EXPECT_NEAR", #a ", " #b ", " #abs_error,            \
-                         BRINFO__ORIG_EXPECT_NEAR(a, b, abs_error))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "EXPECT_NEAR", #a ", " #b ", " #abs_error,                               \
+      EXPECT_PRED_FORMAT3(::testing::internal::DoubleNearPredFormat, a, b,     \
+                          abs_error))
 
 #undef ASSERT_FLOAT_EQ
 #define ASSERT_FLOAT_EQ(a, b)                                                  \
-  BRINFO__ASSERTION_WRAP("ASSERT_FLOAT_EQ", #a ", " #b,                        \
-                         BRINFO__ORIG_ASSERT_FLOAT_EQ(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "ASSERT_FLOAT_EQ", #a ", " #b,                                           \
+      ASSERT_PRED_FORMAT2(                                                     \
+          ::testing::internal::CmpHelperFloatingPointEQ<float>, a, b))
 #undef ASSERT_DOUBLE_EQ
 #define ASSERT_DOUBLE_EQ(a, b)                                                 \
-  BRINFO__ASSERTION_WRAP("ASSERT_DOUBLE_EQ", #a ", " #b,                       \
-                         BRINFO__ORIG_ASSERT_DOUBLE_EQ(a, b))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "ASSERT_DOUBLE_EQ", #a ", " #b,                                          \
+      ASSERT_PRED_FORMAT2(                                                     \
+          ::testing::internal::CmpHelperFloatingPointEQ<double>, a, b))
 #undef ASSERT_NEAR
 #define ASSERT_NEAR(a, b, abs_error)                                           \
-  BRINFO__ASSERTION_WRAP("ASSERT_NEAR", #a ", " #b ", " #abs_error,            \
-                         BRINFO__ORIG_ASSERT_NEAR(a, b, abs_error))
+  BRINFO__ASSERTION_WRAP(                                                      \
+      "ASSERT_NEAR", #a ", " #b ", " #abs_error,                               \
+      ASSERT_PRED_FORMAT3(::testing::internal::DoubleNearPredFormat, a, b,     \
+                          abs_error))
 
 // Notes:
 // - We do not auto-wrap EXPECT_THAT/ASSERT_THAT and DEATH tests here to keep
