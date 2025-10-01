@@ -18,7 +18,7 @@ def open_maybe_gz(path: str) -> TextIO:
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description='BrInfo offline report: extract <prefix, oracle, cond_chain> per assertion')
     ap.add_argument('--logs', required=True, help='NDJSON runtime log (optionally .gz)')
-    ap.add_argument('--meta', default=None, help='Optional meta directory (unused for core logic)')
+    ap.add_argument('--meta', default=None, help='Optional meta directory for static-chain matching and enrichment')
     ap.add_argument('--out', required=True, help='Output JSONL path')
     ap.add_argument('--suite', default=None, help='Filter suite regex (substring match)')
     ap.add_argument('--test', dest='test_name', default=None, help='Filter test name regex (substring match)')
@@ -60,7 +60,14 @@ def emit_triple(out_fp: TextIO, test_info: JsonObj, assert_ev: JsonObj,
                 prefix_calls: List[JsonObj], oracle_calls: List[JsonObj],
                 inv_cond: Dict[int, List[JsonObj]], dedupe_conds: bool,
                 meta: Optional[JsonObj] = None) -> None:
-    """Emit a single triple record to out_fp as JSON line."""
+        """Emit a single triple record to out_fp as JSON line.
+
+        Notes:
+        - cond_chains events include 'flip' which mirrors runtime 'norm_flip'.
+            Matching uses pairs (cond_hash, val ^ flip) to align with static truth values.
+        - When --dedupe-conds is set, cond_chains are de-duplicated for display only;
+            matching still runs on the full original sequence (conds argument).
+        """
 
     def slim_call(c: JsonObj) -> JsonObj:
         return {
@@ -81,15 +88,15 @@ def emit_triple(out_fp: TextIO, test_info: JsonObj, assert_ev: JsonObj,
             'flip': e.get('norm_flip'),
         }
 
-    print(f"[brinfo_report] emit_triple: test={test_info.get('full')}, assert_id={assert_ev.get('assert_id')}, "
-          f"prefix_calls={len(prefix_calls)}, oracle_calls={len(oracle_calls)}, inv_cond={len(inv_cond)}")
+    # print(f"[brinfo_report] emit_triple: test={test_info.get('full')}, assert_id={assert_ev.get('assert_id')}, "
+    #       f"prefix_calls={len(prefix_calls)}, oracle_calls={len(oracle_calls)}, inv_cond={len(inv_cond)}")
 
     cond_chains: Dict[str, List[JsonObj]] = {}
     inv_info: Dict[str, JsonObj] = {}
 
     # Helper to derive function hash and match static chains if meta available
     def derive_func_and_matches(conds: List[JsonObj]) -> Tuple[Optional[str], List[JsonObj]]:
-        print(f"[brinfo_report] derive_func_and_matches: conds={conds}")
+        # print(f"[brinfo_report] derive_func_and_matches: conds={conds}")
         func_hash = None
         for ev in conds:
             fh = ev.get('func')
@@ -99,16 +106,16 @@ def emit_triple(out_fp: TextIO, test_info: JsonObj, assert_ev: JsonObj,
         matches: List[JsonObj] = []
         if func_hash and meta and 'static_chains_by_func' in meta:
             rseq = [(e.get('cond_hash'), bool(e.get('val')) ^ bool(e.get('norm_flip'))) for e in conds]
-            print(f"[brinfo_report] func_hash={func_hash}, rseq={rseq}")
+            # print(f"[brinfo_report] func_hash={func_hash}, rseq={rseq}")
             # print(f"static_chains_by_func: {meta['static_chains_by_func']}")
             static_list: List[Tuple[List[str], str]] = meta['static_chains_by_func'].get(func_hash, [])
-            print(f"[brinfo_report] static_list={static_list}")
+            # print(f"[brinfo_report] static_list={static_list}")
             chain_id = 0
             for hseq, source in static_list:
                 if hseq == rseq:
                     matches.append({'source': source, 'chain_id': chain_id, 'cond_hashes': hseq})
                 chain_id += 1
-        print(f"[brinfo_report] func_hash={func_hash}, conds={len(conds)}, matches={len(matches)}")
+        # print(f"[brinfo_report] func_hash={func_hash}, conds={len(conds)}, matches={len(matches)}")
         return func_hash, matches
 
     for iid, conds in inv_cond.items():
@@ -165,16 +172,28 @@ def emit_triple(out_fp: TextIO, test_info: JsonObj, assert_ev: JsonObj,
 
 
 def load_meta(meta_dir: str) -> JsonObj:
-    """Load meta information from a directory. Supports:
-    - functions.meta.json: function hash -> info
-    - conditions.meta.json: cond hash -> info
-    - chains.meta.json: list of chains with func and cond hashes
-    Returns a dict with consolidated indices.
-    """
+        """Load meta information from a directory.
+
+        Files expected in meta_dir:
+        - conditions.meta.json: { analysis_version, conditions: [ { id, hash, cond_norm, kind, ... } ] }
+            Used to build id -> condition and hash -> condition indices.
+        - chains.meta.json: { analysis_version, chains: [ { func_hash, sequence: [ { cond_id, value }, ... ] } ] }
+            Builds static_chains_by_func with sequences of (cond_hash, value) pairs per function.
+        - functions.meta.json: { analysis_version, functions: [ { hash, name?, signature, ... } ] }
+            Builds functions_by_hash for enrichment.
+
+        Returns: dict with consolidated indices:
+        - functions_by_hash
+        - conditions_by_hash
+        - static_chains_by_func: func_hash -> [ ( [(cond_hash, value), ...], source_path ), ... ]
+        Also warns when analysis_version across the three files is inconsistent.
+        """
     functions_by_hash: Dict[str, JsonObj] = {}
     conditions_by_hash: Dict[str, JsonObj] = {}
     # Internal: map condition id -> condition entry (to resolve chains.sequence)
     conditions_by_id: Dict[int, JsonObj] = {}
+    # Note: each static sequence entry is a list of (cond_hash, value) pairs
+    # associated to a func_hash, along with the source file path it came from.
     static_chains_by_func: Dict[str, List[Tuple[List[str], str]]] = {}
 
     # Track analysis_version across meta files to ensure they are consistent
@@ -235,17 +254,16 @@ def load_meta(meta_dir: str) -> JsonObj:
             for c in conds_raw:
                 if not isinstance(c, dict):
                     continue
+                # Important: cond_id may be 0; do not use truthiness to test presence
                 cid = c.get('cond_id')
                 cval = c.get('value')
-                print(cid)
                 if isinstance(cid, int):
                     info = conditions_by_id.get(cid)
-                    print(info)
                     if info:
                         h = info.get('hash')
                         if h:
                             hseq.append((str(h), cval))
-            print(f"[brinfo_report] chains.meta.json: func_hash={fh}, conds={conds_raw}, hseq={hseq}")
+            # print(f"[brinfo_report] chains.meta.json: func_hash={fh}, conds={conds_raw}, hseq={hseq}")
             add_chain(str(fh) if fh else None, hseq, path)
     except Exception:
         pass
@@ -278,10 +296,10 @@ def load_meta(meta_dir: str) -> JsonObj:
                 f"functions={av_funcs}, conditions={av_conds}, chains={av_chains}\n"
             )
 
-    print(f"[brinfo_report] loaded meta: "
-          f"functions={len(functions_by_hash)}, conditions={len(conditions_by_hash)}, "
-          f"chains={sum(len(v) for v in static_chains_by_func.values())}\n"
-          )
+    # print(f"[brinfo_report] loaded meta: "
+    #       f"functions={len(functions_by_hash)}, conditions={len(conditions_by_hash)}, "
+    #       f"chains={sum(len(v) for v in static_chains_by_func.values())}\n"
+    #       )
 
     return {
         'functions_by_hash': functions_by_hash,
