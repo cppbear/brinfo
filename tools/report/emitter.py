@@ -3,7 +3,10 @@ from typing import Dict, Any, List, Optional, TextIO, Tuple, Set
 
 JsonObj = Dict[str, Any]
 
-from .cond_utils import effective_val, compress_loop_iterations
+try:
+    from .cond_utils import effective_val, compress_loop_iterations
+except Exception:
+    from cond_utils import effective_val, compress_loop_iterations
 
 
 def slim_call(c: JsonObj) -> JsonObj:
