@@ -9,7 +9,8 @@ brinfo_report.py \
 	--logs examples/runtime.ndjson \
 	--meta examples/branch \
 	--out examples/triples.jsonl \
-	--dedupe-conds
+	--dedupe-conds \
+	--approx-match --approx-topk 3 --approx-threshold 0.6
 ```
 
 - 输入：NDJSON 行，事件类型包括 `test_start`、`assertion`、`invocation_start/end`、`cond`。
@@ -25,13 +26,19 @@ brinfo_report.py \
 - `cond_chains`: 字典，键为字符串化的 invocation_id，值为该调用的条件事件数组；每个事件包含：
 	- { file, line, cond_norm, cond_kind, cond_hash, val, flip }
 	- 说明：`flip` 即运行时的 `norm_flip`，用于在匹配时与 `val` 做异或（val ^ flip）。
+	- 循环压缩：运行日志会在每次迭代记录一次循环头（`cond_kind = LOOP`）并穿插循环体条件。为与静态链路对齐，报告会将多次迭代压缩为一次：
+		- 当“进入循环”（以原始 `val` 为 True 判定）时：保留循环头的第一次 True 与“第一轮迭代”的循环体（对其内部再递归压缩），并丢弃最终的循环退出 False；跳过其余迭代。
+		- 若未进入循环（循环头原始 `val` 为 False），则保留该 False 不变。
 - `invocations`: 字典，键为字符串化的 invocation_id；值包含：
 	- func_hash（来自运行时 cond 事件）
 	- signature（来自 functions.meta.json）
 	- matched_static（如成功匹配到静态链）：数组，元素为 { source, chain_id, cond_hashes }
 		- cond_hashes 是静态侧的条件序列，形如 [(cond_hash, value), ...]，其中 value 来自 chains.meta.json 的 sequence.value。
+	- approx_static（当精确匹配为空且启用近似匹配且分数通过阈值时存在）：数组，元素为 { source, chain_id, score, lcp, lcs, diffs }。
+		- score ∈ [0,1]；lcp/lcs 为辅助指标；diffs 为对齐编辑轨迹（op ∈ keep|flip|subst|ins|del），便于解释。
 
 备注：当指定 `--dedupe-conds` 时，仅影响 `cond_chains` 展示（同一 cond_hash 在一次调用中去重），匹配仍基于原始全量顺序事件，不受去重影响。
+（注意：实际用于匹配的序列会先进行“循环压缩”，然后才按 `(cond_hash, val ^ flip)` 二元组与静态链做精确比较；`--dedupe-conds` 仅影响展示层，不影响匹配。）
 
 ## 与静态 meta 的集成
 
@@ -67,6 +74,18 @@ brinfo_report.py \
 	- 其中 `flip` 即事件内的 `norm_flip`，用于与 `val` 做异或，统一与静态定义的真值方向。
 - 静态序列：由 `chains.meta.json` 的 `sequence` 字段解析并映射为 `[(cond_hash, value), ...]`。
 - 精确匹配：当且仅当二者序列完全相同（长度/顺序/二元组一致）即认为匹配成功；匹配结果写入 `invocations[*].matched_static`。
+
+### 近似匹配（可选）
+
+- 通过 `--approx-match` 开启。参数：
+	- `--approx-topk`（默认 3）
+	- `--approx-threshold`（默认 0.6）
+− 当精确匹配为空时，仅在“同一个 func_hash”下计算 Top-K 最相近路径：
+	- 使用路径无关 sid（`cond_kind + '\t' + cond_norm`）
+	- 用 sid 集合的 Jaccard 相似做预筛选
+	- 对 `(sid, val ^ flip)` 做加权全局对齐，LOOP 权重更高
+	- 辅以 LCP/LCS 做排序与解释
+- 若缺少 func_hash 或该 func_hash 不在 meta 中，则不产生近似结果。可用结果写入 `invocations[*].approx_static`。
 
 注意：`cond_hash` 对路径策略敏感（例如拼写位点/展开位点、绝对/相对、realpath、#line 重映射等），请确保静态与运行时采用一致的键生成规则，否则匹配可能失败。后续可考虑引入“路径无关”的备用匹配（基于 cond_norm+cond_kind 的规范化 ID）。
 

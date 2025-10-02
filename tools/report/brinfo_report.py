@@ -23,10 +23,107 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument('--suite', default=None, help='Filter suite regex (substring match)')
     ap.add_argument('--test', dest='test_name', default=None, help='Filter test name regex (substring match)')
     ap.add_argument('--dedupe-conds', action='store_true', help='Deduplicate condition chain by cond_hash')
+    # Approximate matching options
+    ap.add_argument('--approx-match', action='store_true', default=False,
+                    help='When exact static-chain matching is empty, compute approximate matches')
+    ap.add_argument('--approx-topk', type=int, default=3,
+                    help='Top-K approximate static matches to output (default: 3)')
+    ap.add_argument('--approx-threshold', type=float, default=0.6,
+                    help='Minimum score threshold [0..1] for approximate matches (default: 0.6)')
     return ap.parse_args()
 
 
 JsonObj = Dict[str, Any]
+
+
+def _effective_val(ev: JsonObj) -> bool:
+    """Return the effective boolean for a condition event, considering normalization flip.
+
+    Effective value is (val XOR norm_flip) so it aligns with the static truth recorded in meta.
+    """
+    return bool(ev.get('val')) ^ bool(ev.get('norm_flip'))
+
+
+def compress_loop_iterations(conds: List[JsonObj]) -> List[JsonObj]:
+    """Compress repeated loop iterations in a linear sequence of condition events.
+
+    Rationale:
+    - Runtime logs will record loop heads (`cond_kind == 'LOOP'`) once per iteration (typically: True at entry/continue,
+      and a final False to exit), interleaved with body conditions which can repeat across iterations.
+    - Static meta chains only distinguish whether a loop is entered (and the body path once), not how many iterations.
+
+    Strategy:
+        - For each loop head (cond_hash with cond_kind == 'LOOP') when we see a True (RAW val is True), we:
+            1) Keep that True.
+            2) Keep only the first iteration body (events until the next event for the same loop head).
+            3) Skip subsequent iterations entirely and DROP the final False (exit). This matches static chains which
+                 generally do not include an explicit exit record once a loop is entered.
+    - Nested loops are handled recursively by compressing the body slice.
+    - Loop head False without a preceding True (zero-iteration) is preserved.
+
+    Notes:
+    - This is a best-effort normalization that greatly improves alignment with static chains. Some corner cases like
+      do-while with early breaks are still represented sensibly (first observed body kept; no duplicate bodies).
+    """
+    n = len(conds)
+    if n <= 1:
+        return list(conds)
+
+    out: List[JsonObj] = []
+    i = 0
+
+    def is_loop(ev: JsonObj) -> bool:
+        return (ev.get('cond_kind') or '').upper() == 'LOOP'
+
+    while i < n:
+        ev = conds[i]
+        if not is_loop(ev):
+            out.append(ev)
+            i += 1
+            continue
+
+        # Loop head encountered
+        loop_hash = ev.get('cond_hash')
+        # Use RAW runtime value to decide whether the loop is entered
+        ev_true = bool(ev.get('val'))
+        if not ev_true:
+            # Zero-iteration check (or exit point) — keep single False and move on
+            out.append(ev)
+            i += 1
+            continue
+
+        # Keep the first True for this loop head
+        out.append(ev)
+
+        # Find the next event for the same loop head to delimit the first body slice
+        j = i + 1
+        while j < n:
+            ej = conds[j]
+            if is_loop(ej) and ej.get('cond_hash') == loop_hash:
+                break
+            j += 1
+
+        # Compress and append the first-iteration body (if any)
+        if j > i + 1:
+            out.extend(compress_loop_iterations(conds[i + 1:j]))
+
+        # Find the last False (exit) for this loop head after j
+        k: Optional[int] = None
+        p = j
+        while p < n:
+            ep = conds[p]
+            # Use RAW False to detect exit
+            if is_loop(ep) and ep.get('cond_hash') == loop_hash and not bool(ep.get('val')):
+                k = p  # update to latest exit we see
+            p += 1
+
+        # If an explicit exit False exists, DROP it (we already entered the loop) but advance past it; otherwise continue at j
+        if k is not None:
+            i = k + 1
+        else:
+            i = j
+
+    return out
 
 
 class TestState:
@@ -59,15 +156,16 @@ def should_keep_test(test_info: Optional[JsonObj], suite_filter: Optional[str], 
 def emit_triple(out_fp: TextIO, test_info: JsonObj, assert_ev: JsonObj,
                 prefix_calls: List[JsonObj], oracle_calls: List[JsonObj],
                 inv_cond: Dict[int, List[JsonObj]], dedupe_conds: bool,
-                meta: Optional[JsonObj] = None) -> None:
-        """Emit a single triple record to out_fp as JSON line.
+                meta: Optional[JsonObj] = None,
+                approx_ctx: Optional[Dict[str, Any]] = None) -> None:
+    """Emit a single triple record to out_fp as JSON line.
 
-        Notes:
-        - cond_chains events include 'flip' which mirrors runtime 'norm_flip'.
-            Matching uses pairs (cond_hash, val ^ flip) to align with static truth values.
-        - When --dedupe-conds is set, cond_chains are de-duplicated for display only;
-            matching still runs on the full original sequence (conds argument).
-        """
+    Notes:
+    - cond_chains events include 'flip' which mirrors runtime 'norm_flip'.
+        Matching uses pairs (cond_hash, val ^ flip) to align with static truth values.
+    - When --dedupe-conds is set, cond_chains are de-duplicated for display only;
+        matching still runs on the full original sequence (conds argument).
+    """
 
     def slim_call(c: JsonObj) -> JsonObj:
         return {
@@ -105,7 +203,9 @@ def emit_triple(out_fp: TextIO, test_info: JsonObj, assert_ev: JsonObj,
                 break
         matches: List[JsonObj] = []
         if func_hash and meta and 'static_chains_by_func' in meta:
-            rseq = [(e.get('cond_hash'), bool(e.get('val')) ^ bool(e.get('norm_flip'))) for e in conds]
+            # Match against compressed sequence to remove repeated loop iterations
+            _c = compress_loop_iterations(conds)
+            rseq = [(e.get('cond_hash'), _effective_val(e)) for e in _c]
             # print(f"[brinfo_report] func_hash={func_hash}, rseq={rseq}")
             # print(f"static_chains_by_func: {meta['static_chains_by_func']}")
             static_list: List[Tuple[List[str], str]] = meta['static_chains_by_func'].get(func_hash, [])
@@ -119,20 +219,22 @@ def emit_triple(out_fp: TextIO, test_info: JsonObj, assert_ev: JsonObj,
         return func_hash, matches
 
     for iid, conds in inv_cond.items():
+        # Always compress loops for both display and matching
+        conds_comp = compress_loop_iterations(conds)
         if dedupe_conds:
             seen: Set[Any] = set()
             deduped: List[JsonObj] = []
-            for ev in conds:
+            for ev in conds_comp:
                 h = ev.get('cond_hash')
                 if h in seen:
                     continue
                 seen.add(h)
                 deduped.append(slim_cond(ev))
             cond_chains[str(iid)] = deduped
-            func_hash, matches = derive_func_and_matches(conds)
+            func_hash, matches = derive_func_and_matches(conds_comp)
         else:
-            cond_chains[str(iid)] = [slim_cond(ev) for ev in conds]
-            func_hash, matches = derive_func_and_matches(conds)
+            cond_chains[str(iid)] = [slim_cond(ev) for ev in conds_comp]
+            func_hash, matches = derive_func_and_matches(conds_comp)
 
         inv_entry: JsonObj = {}
         if func_hash:
@@ -145,6 +247,18 @@ def emit_triple(out_fp: TextIO, test_info: JsonObj, assert_ev: JsonObj,
                         inv_entry['signature'] = sig
         if matches:
             inv_entry['matched_static'] = matches
+        elif approx_ctx and approx_ctx.get('enabled') and meta:
+            # Attempt approximate matching using compressed sequence
+            try:
+                matcher = approx_ctx.get('matcher')
+                if matcher is not None:
+                    topk = int(approx_ctx.get('topk', 3))
+                    thr = float(approx_ctx.get('threshold', 0.6))
+                    approx = matcher.match(func_hash, conds_comp, topk=topk, threshold=thr)
+                    if approx:
+                        inv_entry['approx_static'] = approx
+            except Exception:
+                pass
         if inv_entry:
             inv_info[str(iid)] = inv_entry
 
@@ -172,22 +286,22 @@ def emit_triple(out_fp: TextIO, test_info: JsonObj, assert_ev: JsonObj,
 
 
 def load_meta(meta_dir: str) -> JsonObj:
-        """Load meta information from a directory.
+    """Load meta information from a directory.
 
-        Files expected in meta_dir:
-        - conditions.meta.json: { analysis_version, conditions: [ { id, hash, cond_norm, kind, ... } ] }
-            Used to build id -> condition and hash -> condition indices.
-        - chains.meta.json: { analysis_version, chains: [ { func_hash, sequence: [ { cond_id, value }, ... ] } ] }
-            Builds static_chains_by_func with sequences of (cond_hash, value) pairs per function.
-        - functions.meta.json: { analysis_version, functions: [ { hash, name?, signature, ... } ] }
-            Builds functions_by_hash for enrichment.
+    Files expected in meta_dir:
+    - conditions.meta.json: { analysis_version, conditions: [ { id, hash, cond_norm, kind, ... } ] }
+        Used to build id -> condition and hash -> condition indices.
+    - chains.meta.json: { analysis_version, chains: [ { func_hash, sequence: [ { cond_id, value }, ... ] } ] }
+        Builds static_chains_by_func with sequences of (cond_hash, value) pairs per function.
+    - functions.meta.json: { analysis_version, functions: [ { hash, name?, signature, ... } ] }
+        Builds functions_by_hash for enrichment.
 
-        Returns: dict with consolidated indices:
-        - functions_by_hash
-        - conditions_by_hash
-        - static_chains_by_func: func_hash -> [ ( [(cond_hash, value), ...], source_path ), ... ]
-        Also warns when analysis_version across the three files is inconsistent.
-        """
+    Returns: dict with consolidated indices:
+    - functions_by_hash
+    - conditions_by_hash
+    - static_chains_by_func: func_hash -> [ ( [(cond_hash, value), ...], source_path ), ... ]
+    Also warns when analysis_version across the three files is inconsistent.
+    """
     functions_by_hash: Dict[str, JsonObj] = {}
     conditions_by_hash: Dict[str, JsonObj] = {}
     # Internal: map condition id -> condition entry (to resolve chains.sequence)
@@ -318,11 +432,33 @@ def main() -> None:
         out_fp = open(args.out, 'w', encoding='utf-8')
 
     meta: Optional[JsonObj] = None
+    approx_ctx: Optional[Dict[str, Any]] = None
     if args.meta:
         try:
             meta = load_meta(args.meta)
         except Exception:
             meta = None
+    # Initialize approximate matcher if requested and meta is available
+    if args.approx_match and meta:
+        try:
+            # Local import to avoid mandatory dependency when not used
+            from . import approx_match as _approx_mod  # type: ignore
+        except Exception:
+            try:
+                import approx_match as _approx_mod  # type: ignore
+            except Exception:
+                _approx_mod = None  # type: ignore
+        if _approx_mod is not None:
+            try:
+                matcher = _approx_mod.ApproxMatcher.from_meta(meta)
+                approx_ctx = {
+                    'enabled': True,
+                    'topk': args.approx_topk,
+                    'threshold': args.approx_threshold,
+                    'matcher': matcher,
+                }
+            except Exception:
+                approx_ctx = None
 
     tests: Dict[int, TestState] = {}
 
@@ -390,7 +526,7 @@ def main() -> None:
                     iids = {c['invocation_id'] for c in st.curr_prefix} | {c['invocation_id'] for c in st.oracle_calls}
                     inv_cond = {iid: st.inv_cond_all.get(iid, []) for iid in iids}
                     emit_triple(out_fp, st.test_info, st.open_assert,
-                                st.curr_prefix, st.oracle_calls, inv_cond, args.dedupe_conds, meta)
+                                st.curr_prefix, st.oracle_calls, inv_cond, args.dedupe_conds, meta, approx_ctx)
                 # Start new assertion window: snapshot current buffer as prefix
                 st.open_assert = ev
                 st.curr_prefix = st.buffer_prefix
@@ -404,7 +540,7 @@ def main() -> None:
                     iids = {c['invocation_id'] for c in st.curr_prefix} | {c['invocation_id'] for c in st.oracle_calls}
                     inv_cond = {iid: st.inv_cond_all.get(iid, []) for iid in iids}
                     emit_triple(out_fp, st.test_info, st.open_assert,
-                                st.curr_prefix, st.oracle_calls, inv_cond, args.dedupe_conds, meta)
+                                st.curr_prefix, st.oracle_calls, inv_cond, args.dedupe_conds, meta, approx_ctx)
                 st.open_assert = None
                 st.curr_prefix = []
                 st.buffer_prefix.clear()
@@ -417,7 +553,7 @@ def main() -> None:
         if st.open_assert and st.test_info and should_keep_test(st.test_info, args.suite, args.test_name):
             iids = {c['invocation_id'] for c in st.curr_prefix} | {c['invocation_id'] for c in st.oracle_calls}
             inv_cond = {iid: st.inv_cond_all.get(iid, []) for iid in iids}
-            emit_triple(out_fp, st.test_info, st.open_assert, st.curr_prefix, st.oracle_calls, inv_cond, args.dedupe_conds, meta)
+            emit_triple(out_fp, st.test_info, st.open_assert, st.curr_prefix, st.oracle_calls, inv_cond, args.dedupe_conds, meta, approx_ctx)
 
     if args.out != '-':
         out_fp.close()

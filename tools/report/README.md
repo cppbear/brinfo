@@ -9,7 +9,8 @@ brinfo_report.py \
   --logs examples/runtime.ndjson \
   --meta examples/branch \
   --out examples/triples.jsonl \
-  --dedupe-conds
+  --dedupe-conds \
+  --approx-match --approx-topk 3 --approx-threshold 0.6
 ```
 
 - Input: NDJSON lines with event types `test_start`, `assertion`, `invocation_start/end`, `cond`.
@@ -25,11 +26,17 @@ brinfo_report.py \
 - `cond_chains`: object keyed by stringified `invocation_id`. Each value is an array of condition events for that call; each event has:
   - `{ file, line, cond_norm, cond_kind, cond_hash, val, flip }`
   - `flip` mirrors runtime field `norm_flip`; matching uses `(val XOR flip)` to align with static truth values.
+  - Loop-iteration compression: runtime logs include loop heads (`cond_kind = LOOP`) once per iteration and interleaved body conditions. The report compresses repeated iterations into a single iteration for matching and display:
+    - On loop enter (raw `val` True), keeps the first True at loop head and the first-iteration body (recursively compressed), drops the final loop-exit False.
+    - Skips subsequent iterations entirely.
+    - If the loop is not entered (raw `val` False at the head), the False is preserved.
 - `invocations`: object keyed by stringified `invocation_id`. Value contains:
   - `func_hash` (from runtime cond events)
   - `signature` (from `functions.meta.json`)
   - `matched_static` (if matched): array of `{ source, chain_id, cond_hashes }`
     - `cond_hashes` is the static sequence `[(cond_hash, value), ...]` with `value` taken from `chains.meta.json` `sequence.value`.
+  - `approx_static` (present only when exact matching is empty and approximate matching is enabled and passes threshold): array of `{ source, chain_id, score, lcp, lcs, diffs }`.
+    - `score` ∈ [0,1], higher is better; `lcp`/`lcs` are auxiliary metrics; `diffs` is a list of edit steps `{op: keep|flip|subst|ins|del, ...}` for explainability.
 
 Note on `--dedupe-conds`:
 - Affects display only: `cond_chains` entries for each invocation will deduplicate by `cond_hash`.
@@ -68,6 +75,18 @@ Consistency checks:
 - Runtime sequence: `rseq = [(cond_hash, val XOR flip), ...]` for that invocation, where `flip = norm_flip`.
 - Static sequence: `[(cond_hash, value), ...]` from `chains.meta.json`, resolved via `conditions.meta.json`.
 - Exact match: only when `rseq` equals the static sequence (same length/order/pairs). On success, write `invocations[*].matched_static`.
+
+### Approximate matching (optional)
+
+- Enable with `--approx-match`. Parameters:
+  - `--approx-topk` (default 3)
+  - `--approx-threshold` (default 0.6)
+- When exact match is empty, the tool computes Top-K nearest static chains strictly within the same `func_hash` using:
+  - Path-insensitive semantic IDs (sid = `cond_kind + '\t' + cond_norm`),
+  - Prefilter by sid-set Jaccard similarity,
+  - Weighted global alignment over `(sid, val XOR flip)` with LOOP given higher weight,
+  - Auxiliary LCP/LCS for tie-breaking.
+- If `func_hash` is missing or not present in meta, no approximate results are produced. Results are emitted under `invocations[*].approx_static` when available.
 
 Important: `cond_hash` can be path-sensitive (spelling vs expansion locations, absolute vs relative, realpath, `#line` remapping, etc.). Ensure runtime and static sides use the same hashing policy; otherwise matching may fail. A path-insensitive fallback (e.g., canonicalized `cond_norm + cond_kind`) can be added in future.
 
