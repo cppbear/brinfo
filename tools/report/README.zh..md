@@ -37,7 +37,7 @@ brinfo_report.py \
 	- approx_static（当精确匹配为空且启用近似匹配且分数通过阈值时存在）：数组，元素为 { source, chain_id, score, lcp, lcs, diffs }。
 		- score ∈ [0,1]；lcp/lcs 为辅助指标；diffs 为对齐编辑轨迹（op ∈ keep|flip|subst|ins|del），便于解释。
 
-备注：当指定 `--dedupe-conds` 时，仅影响 `cond_chains` 展示（同一 cond_hash 在一次调用中去重），匹配仍基于原始全量顺序事件，不受去重影响。
+备注：当指定 `--dedupe-conds` 时，仅影响 `cond_chains` 展示（同一 cond_hash 在一次调用中去重），匹配不受去重影响。
 （注意：实际用于匹配的序列会先进行“循环压缩”，然后才按 `(cond_hash, val ^ flip)` 二元组与静态链做精确比较；`--dedupe-conds` 仅影响展示层，不影响匹配。）
 
 ## 与静态 meta 的集成
@@ -80,7 +80,7 @@ brinfo_report.py \
 - 通过 `--approx-match` 开启。参数：
 	- `--approx-topk`（默认 3）
 	- `--approx-threshold`（默认 0.6）
-− 当精确匹配为空时，仅在“同一个 func_hash”下计算 Top-K 最相近路径：
+- 当精确匹配为空时，仅在“同一个 func_hash”下计算 Top-K 最相近路径：
 	- 使用路径无关 sid（`cond_kind + '\t' + cond_norm`）
 	- 用 sid 集合的 Jaccard 相似做预筛选
 	- 对 `(sid, val ^ flip)` 做加权全局对齐，LOOP 权重更高

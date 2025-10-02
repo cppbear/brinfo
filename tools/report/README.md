@@ -40,7 +40,7 @@ brinfo_report.py \
 
 Note on `--dedupe-conds`:
 - Affects display only: `cond_chains` entries for each invocation will deduplicate by `cond_hash`.
-- Matching still uses the full original runtime condition sequence (not deduped).
+- Matching uses the loop-compressed runtime sequence (see above), but is not affected by `--dedupe-conds`.
 
 ## Static meta integration
 
