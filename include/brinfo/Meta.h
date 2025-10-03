@@ -57,7 +57,9 @@ public:
                              const std::unordered_set<unsigned> &MinCover,
                              const std::vector<std::string> &ReturnStrs);
 
-  static void dumpAll(const std::string &ProjectRoot);
+  // Dump collected meta into ProjectRoot/llm_reqs/meta/<FileName>/...
+  static void dumpAll(const std::string &ProjectRoot,
+                      const std::string &FileName);
 
 private:
   static uint64_t hashCombine(uint64_t H, uint64_t V);

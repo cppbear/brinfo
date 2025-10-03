@@ -174,7 +174,8 @@ void MetaCollector::recordFunction(
   }
 }
 
-void MetaCollector::dumpAll(const std::string &ProjectRoot) {
+void MetaCollector::dumpAll(const std::string &ProjectRoot,
+                            const std::string &FileName) {
   std::string Version = nowISO8601();
   // conditions
   json JCond;
@@ -222,7 +223,16 @@ void MetaCollector::dumpAll(const std::string &ProjectRoot) {
     JChains["chains"].push_back(JC);
   }
 
-  std::filesystem::path OutDir = ProjectRoot + "/llm_reqs";
+  // Put meta under a subfolder named by the current analyzed file
+  // e.g., <ProjectRoot>/llm_reqs/meta/<FileName>/
+  std::filesystem::path OutDir;
+  if (!FileName.empty()) {
+    OutDir =
+        std::filesystem::path(ProjectRoot) / "llm_reqs" / "meta" / FileName;
+  } else {
+    // Fallback to a flat meta directory if filename not provided
+    OutDir = std::filesystem::path(ProjectRoot) / "llm_reqs" / "meta";
+  }
   std::filesystem::create_directories(OutDir);
   {
     std::ofstream Os((OutDir / "conditions.meta.json").string());

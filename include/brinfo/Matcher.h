@@ -106,7 +106,7 @@ inline int run(ClangTool &Tool) {
   }
   int Res = Tool.run(newFrontendActionFactory(&Finder).get());
   Analyzer.dumpReqToJson(RealProjectPath, FileName, ClassName, FunctionName);
-  MetaCollector::dumpAll(RealProjectPath);
+  MetaCollector::dumpAll(RealProjectPath, FileName);
   return Res;
 }
 
