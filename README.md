@@ -95,6 +95,12 @@ The condition chains analyzed by the tool will be saved as JSON files with the f
 
 ## Runtime and GTest integration
 
+- Copy the runtime support files into the project you are analyzing (for example under a `third_party/brinfo/` folder):
+   - `include/brinfo/GTestAutoWrap.h`
+   - `include/brinfo/GTestSupport.h`
+   - `include/brinfo/Runtime.h`
+   - `src/runtime/Runtime.cpp`
+- Update the project's build system (Makefile/CMakeLists.txt/etc.) to ensure `Runtime.cpp` is compiled and the headers are on the include path of your tests. A simple approach is to add a static library/OBJECT library that contains `Runtime.cpp` and link it into every test binary that emits BrInfo logs.
 - Include `brinfo/GTestSupport.h` in your tests to register the listener and to use `BRINFO_CALL(...)` around call sites you want to track.
 - To auto-wrap assertion macros so invocations inside assertions are marked `in_oracle`, enable auto-wrap by defining `BRINFO_AUTO_WRAP_GTEST` and including `brinfo/GTestAutoWrap.h` before `<gtest/gtest.h>`.
 - Alternatively, use the AST rewriter `brinfo_callwrap` to rewrite your test sources and insert `BRINFO_CALL(...)` automatically (with optional macro-argument wrapping).

@@ -4,7 +4,16 @@
 
 本文说明如何将 Google Test 上下文（测试用例、断言）与运行时条件日志关联，从而把（前缀、预言）映射到静态条件链。
 
-前置：测试二进制需链接 `brinfo` 运行时，并能包含 `brinfo/GTestSupport.h`。
+前置：
+
+1. 将以下运行时支持文件拷贝到被分析的项目中（例如放在 `third_party/brinfo/`）：
+  - `include/brinfo/GTestAutoWrap.h`
+  - `include/brinfo/GTestSupport.h`
+  - `include/brinfo/Runtime.h`
+  - `src/runtime/Runtime.cpp`
+2. 在项目的构建脚本（Makefile/CMakeLists.txt 等）中，确保 `Runtime.cpp` 会被编译并链接到需要产生日志的测试可执行文件，并把拷贝后的 `include/brinfo` 目录加入头文件搜索路径。
+
+完成上述准备后，测试二进制即可包含 `brinfo/GTestSupport.h` 并链接到运行时实现。
 
 ## 1）注册 GTest 监听器
 

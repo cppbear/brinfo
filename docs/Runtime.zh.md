@@ -4,6 +4,8 @@
 
 BrInfo 以 NDJSON 事件的形式输出测试、断言、调用与条件，便于离线归并与分析。
 
+> 使用运行时前，请先将 `include/brinfo/GTestAutoWrap.h`、`include/brinfo/GTestSupport.h`、`include/brinfo/Runtime.h`、`src/runtime/Runtime.cpp` 等文件拷贝到目标项目，并在 Makefile/CMakeLists.txt 等构建脚本中加入编译 `Runtime.cpp` 及包含 `include/brinfo` 目录的设置，确保测试可执行文件能链接到运行时实现。
+
 ## 事件类型
 
 - test_start, test_end

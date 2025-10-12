@@ -4,6 +4,8 @@
 
 BrInfo emits NDJSON events to correlate tests, assertions, invocations, and runtime conditions.
 
+> Before using the runtime, make sure the analyzed project copies `include/brinfo/GTestAutoWrap.h`, `include/brinfo/GTestSupport.h`, `include/brinfo/Runtime.h`, and `src/runtime/Runtime.cpp` (or makes them otherwise available) and compiles `Runtime.cpp` as part of its tests. Update your Makefile/CMakeLists.txt accordingly so the runtime implementation is linked when the tests run.
+
 ## Event types
 
 - test_start, test_end

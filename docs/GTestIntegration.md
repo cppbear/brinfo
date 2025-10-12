@@ -4,7 +4,16 @@
 
 This guide shows how to attach Google Test context (test case, assertion) and top-level invocations to the runtime condition logs, so you can map (prefix, oracle) to static condition chains.
 
-Prerequisites: your test binary links with `brinfo` library and can include `brinfo/GTestSupport.h`.
+Prerequisites:
+
+1. Copy the runtime support sources from this repository into the project under test (e.g. `third_party/brinfo/`):
+  - `include/brinfo/GTestAutoWrap.h`
+  - `include/brinfo/GTestSupport.h`
+  - `include/brinfo/Runtime.h`
+  - `src/runtime/Runtime.cpp`
+2. Update the project's build files so that `Runtime.cpp` is compiled and linked into every test binary that should emit BrInfo events, and add the copied `include/brinfo` directory to the include path.
+
+Once those files are available to your project, your test binary can include `brinfo/GTestSupport.h` and link against the compiled runtime implementation.
 
 ## 1) Register the GTest listener
 
