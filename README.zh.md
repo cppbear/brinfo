@@ -18,10 +18,10 @@ BrInfo 是一个基于 C++/Clang 的工具集，用于将静态控制流条件�
 ## 运行时与 GTest 集成
 
 - 请将以下运行时支持文件复制到被分析项目（例如放在 `third_party/brinfo/` 目录下）：
-	- `include/brinfo/GTestAutoWrap.h`
-	- `include/brinfo/GTestSupport.h`
-	- `include/brinfo/Runtime.h`
-	- `src/runtime/Runtime.cpp`
+   - `include/brinfo/GTestAutoWrap.h`
+   - `include/brinfo/GTestSupport.h`
+   - `include/brinfo/Runtime.h`
+   - `src/runtime/Runtime.cpp`
 - 修改项目的构建脚本（Makefile/CMakeLists.txt 等），确保 `Runtime.cpp` 会被编译并链接到需要产生日志的测试可执行文件中，同时为测试代码添加上述 `include/brinfo` 目录到头文件搜索路径。
 - 在测试中包含 `brinfo/GTestSupport.h` 以注册监听器，并用 `BRINFO_CALL(...)` 包裹需要跟踪的调用点。
 - 如果希望断言宏内部的调用自动标注 `in_oracle`，请定义 `BRINFO_AUTO_WRAP_GTEST` 并在 `<gtest/gtest.h>` 之前包含 `brinfo/GTestAutoWrap.h`。
