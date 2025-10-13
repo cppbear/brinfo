@@ -3,9 +3,12 @@ import argparse
 import json
 import sys
 import os
+import logging
 from typing import Dict, Any, List, Optional, TextIO
 
 # Prefer package-relative imports; fall back to absolute when executed as a script
+logger = logging.getLogger("brinfo.report")
+
 try:
     from .runtime_utils import open_maybe_gz, TestState, should_keep_test as _skt_impl
     from .meta_loader import load_meta as _load_meta_impl
@@ -38,6 +41,8 @@ def parse_args() -> argparse.Namespace:
                     help='Top-K approximate static matches to output (default: 3)')
     ap.add_argument('--approx-threshold', type=float, default=0.6,
                     help='Minimum score threshold [0..1] for approximate matches (default: 0.6)')
+    ap.add_argument('--log-level', default='warning', choices=['critical', 'error', 'warning', 'info', 'debug'],
+                    help='Logging verbosity (default: warning)')
     return ap.parse_args()
 
 
@@ -66,19 +71,31 @@ def load_meta(meta_dir: str) -> JsonObj:
 def main() -> None:
     args = parse_args()
 
+    log_level = getattr(logging, args.log_level.upper(), logging.WARNING)
+    logging.basicConfig(level=log_level,
+                        format='[brinfo_report] %(levelname)s: %(message)s',
+                        stream=sys.stderr)
+    logger.setLevel(log_level)
+    logger.debug('CLI arguments: %s', args)
+
     # Open output upfront so we can emit while parsing
     if args.out == '-':
         out_fp = sys.stdout
     else:
         out_fp = open(args.out, 'w', encoding='utf-8')
+    logger.info('Writing report to %s', 'stdout' if args.out == '-' else args.out)
 
     meta: Optional[JsonObj] = None
     approx_ctx: Optional[Dict[str, Any]] = None
     if args.meta:
         try:
             meta = load_meta(args.meta)
+            logger.info('Loaded meta from %s', args.meta)
         except Exception:
+            logger.exception('Failed to load meta from %s', args.meta)
             meta = None
+    else:
+        logger.debug('No meta directory provided; skipping static enrichment')
     # Initialize approximate matcher if requested and meta is available
     if args.approx_match and meta:
         try:
@@ -98,12 +115,22 @@ def main() -> None:
                     'threshold': args.approx_threshold,
                     'matcher': matcher,
                 }
+                logger.info('Approximate matcher enabled (topk=%d, threshold=%.2f)',
+                            args.approx_topk, args.approx_threshold)
             except Exception:
+                logger.exception('Failed to initialize approximate matcher; disabling')
                 approx_ctx = None
+        else:
+            logger.warning('Approximate matcher module unavailable; disabling approx matching')
+    elif args.approx_match:
+        logger.warning('Approximate matching requested but meta is unavailable')
+    else:
+        logger.debug('Approximate matching disabled')
 
     tests: Dict[int, TestState] = {}
 
     with open_maybe_gz(args.logs) as fp:
+        logger.info('Reading runtime log from %s', args.logs)
         for line in fp:
             line = line.strip()
             if not line:
@@ -166,6 +193,9 @@ def main() -> None:
                     # Filter conds for calls in this assertion window
                     iids = {c['invocation_id'] for c in st.curr_prefix} | {c['invocation_id'] for c in st.oracle_calls}
                     inv_cond = {iid: st.inv_cond_all.get(iid, []) for iid in iids}
+                    logger.debug('Emitting assertion triple for %s::%s (assert_id=%s)',
+                                 st.test_info.get('suite'), st.test_info.get('name'),
+                                 st.open_assert.get('assert_id'))
                     emit_triple(out_fp, st.test_info, st.open_assert,
                                 st.curr_prefix, st.oracle_calls, inv_cond, args.dedupe_conds, meta, approx_ctx)
                 # Start new assertion window: snapshot current buffer as prefix
@@ -180,6 +210,9 @@ def main() -> None:
                 if st.open_assert and st.test_info and should_keep_test(st.test_info, args.suite, args.test_name):
                     iids = {c['invocation_id'] for c in st.curr_prefix} | {c['invocation_id'] for c in st.oracle_calls}
                     inv_cond = {iid: st.inv_cond_all.get(iid, []) for iid in iids}
+                    logger.debug('Emitting assertion triple on test_end for %s::%s (assert_id=%s)',
+                                 st.test_info.get('suite'), st.test_info.get('name'),
+                                 st.open_assert.get('assert_id'))
                     emit_triple(out_fp, st.test_info, st.open_assert,
                                 st.curr_prefix, st.oracle_calls, inv_cond, args.dedupe_conds, meta, approx_ctx)
                 st.open_assert = None
@@ -194,10 +227,14 @@ def main() -> None:
         if st.open_assert and st.test_info and should_keep_test(st.test_info, args.suite, args.test_name):
             iids = {c['invocation_id'] for c in st.curr_prefix} | {c['invocation_id'] for c in st.oracle_calls}
             inv_cond = {iid: st.inv_cond_all.get(iid, []) for iid in iids}
+            logger.debug('Emitting assertion triple during final flush for %s::%s (assert_id=%s)',
+                         st.test_info.get('suite'), st.test_info.get('name'),
+                         st.open_assert.get('assert_id'))
             emit_triple(out_fp, st.test_info, st.open_assert, st.curr_prefix, st.oracle_calls, inv_cond, args.dedupe_conds, meta, approx_ctx)
 
     if args.out != '-':
         out_fp.close()
+    logger.info('Report generation complete')
 
 
 if __name__ == '__main__':
