@@ -43,15 +43,11 @@ struct AssertionScopeGuard {
 // via predicate forms (EXPECT/ASSERT_PRED_FORMAT*), avoiding recursion.
 #undef EXPECT_TRUE
 #define EXPECT_TRUE(cond)                                                      \
-  BRINFO__ASSERTION_WRAP(                                                      \
-      "EXPECT_TRUE", #cond,                                                    \
-      EXPECT_PRED_FORMAT1(::testing::internal::IsTrue, cond))
+  BRINFO__ASSERTION_WRAP("EXPECT_TRUE", #cond, GTEST_EXPECT_TRUE(cond))
 
 #undef EXPECT_FALSE
 #define EXPECT_FALSE(cond)                                                     \
-  BRINFO__ASSERTION_WRAP(                                                      \
-      "EXPECT_FALSE", #cond,                                                   \
-      EXPECT_PRED_FORMAT1(::testing::internal::IsFalse, cond))
+  BRINFO__ASSERTION_WRAP("EXPECT_FALSE", #cond, GTEST_EXPECT_FALSE(cond))
 
 #undef EXPECT_EQ
 #define EXPECT_EQ(a, b)                                                        \
@@ -92,15 +88,11 @@ struct AssertionScopeGuard {
 // ASSERT_* counterparts: early-return is handled by RAII guard
 #undef ASSERT_TRUE
 #define ASSERT_TRUE(cond)                                                      \
-  BRINFO__ASSERTION_WRAP(                                                      \
-      "ASSERT_TRUE", #cond,                                                    \
-      ASSERT_PRED_FORMAT1(::testing::internal::IsTrue, cond))
+  BRINFO__ASSERTION_WRAP("ASSERT_TRUE", #cond, GTEST_ASSERT_TRUE(cond))
 
 #undef ASSERT_FALSE
 #define ASSERT_FALSE(cond)                                                     \
-  BRINFO__ASSERTION_WRAP(                                                      \
-      "ASSERT_FALSE", #cond,                                                   \
-      ASSERT_PRED_FORMAT1(::testing::internal::IsFalse, cond))
+  BRINFO__ASSERTION_WRAP("ASSERT_FALSE", #cond, GTEST_ASSERT_FALSE(cond))
 
 #undef ASSERT_EQ
 #define ASSERT_EQ(a, b)                                                        \

@@ -88,6 +88,13 @@ class IfInstrumentVisitor : public RecursiveASTVisitor<IfInstrumentVisitor> {
     return Out;
   }
 
+  std::string getSourceText(const SourceRange &Range) const {
+    if (Range.isInvalid())
+      return "";
+    return Lexer::getSourceText(CharSourceRange::getTokenRange(Range), SM, LO)
+        .str();
+  }
+
   // Strict normalization mirroring BaseCond::setCondStr: != -> ==, !X -> X
   std::string condNormFromExpr(const Expr *E) {
     if (!E)
@@ -177,6 +184,44 @@ public:
     // wrapped.
     if (containsLogicalOp(Cond))
       return true;
+
+    if (auto *Var = If->getConditionVariable()) {
+      SourceLocation CondBegin = Cond->getBeginLoc();
+      SourceLocation CondEnd = Cond->getEndLoc();
+      if (CondBegin.isInvalid() || CondEnd.isInvalid() ||
+          !SM.isWrittenInMainFile(CondBegin))
+        return true;
+
+      unsigned Line = SM.getSpellingLineNumber(CondBegin);
+      std::string File = SM.getFilename(CondBegin).str();
+      auto [Norm, H] = makeCondNormAndHash(File, Line, Cond);
+      bool Flip = condNormFlipped(Cond);
+
+      std::string InitText =
+          rtrimSemiSpace(getSourceText(Var->getSourceRange()));
+      std::string CondText = rtrimSemiSpace(
+          getSourceText(SourceRange(CondBegin, CondEnd)));
+      if (InitText.empty() || CondText.empty())
+        return true;
+
+      std::string LogCall = std::string("BrInfo::Runtime::LogCond(") +
+                            BrInfo::toHex64(CurrentFuncHash) + ", \"" + File +
+                            "\", " + std::to_string(Line) + ", (bool)(" +
+                            CondText + ") , \"" + escapeForCxxString(Norm) +
+                            "\", " + BrInfo::toHex64(H) + ", " +
+                            (Flip ? "true" : "false") + ", \"IF\")";
+
+      SourceLocation LParen = If->getLParenLoc();
+      SourceLocation RParen = If->getRParenLoc();
+      if (LParen.isInvalid() || RParen.isInvalid())
+        return true;
+
+      std::string Replacement =
+          std::string("(") + InitText + "; " + LogCall + ")";
+      R.ReplaceText(SourceRange(LParen, RParen), Replacement);
+      return true;
+    }
+
     SourceLocation SL = Cond->getBeginLoc();
     if (SL.isInvalid() || !SM.isWrittenInMainFile(SL))
       return true;
