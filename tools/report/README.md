@@ -10,12 +10,14 @@ brinfo_report.py \
   --meta examples/branch \
   --out examples/triples.jsonl \
   --dedupe-conds \
-  --approx-match --approx-topk 3 --approx-threshold 0.6
+  --approx-match --approx-topk 3 --approx-threshold 0.6 \
+  --log-level info
 ```
 
 - Input: NDJSON lines with event types `test_start`, `assertion`, `invocation_start/end`, `cond`.
 - Output: JSONL, one record per assertion.
 - Filtering: Use `--suite` or `--test` with substring matching.
+- Diagnostics: Raise verbosity with `--log-level info`/`debug`; defaults to `warning`.
 
 ## Record schema
 
@@ -104,6 +106,8 @@ Important: `cond_hash` can be path-sensitive (spelling vs expansion locations, a
 
 - Matching fails after `--dedupe-conds`:
   - Matching is unaffected by dedupe; failures likely due to `cond_hash` mismatch or missing static sequences.
+- Need more insight?
+  - Re-run with `--log-level debug` to inspect meta loading, matcher setup, and per-assertion emission.
 
 ## Example
 

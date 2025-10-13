@@ -10,12 +10,14 @@ brinfo_report.py \
 	--meta examples/branch \
 	--out examples/triples.jsonl \
 	--dedupe-conds \
-	--approx-match --approx-topk 3 --approx-threshold 0.6
+	--approx-match --approx-topk 3 --approx-threshold 0.6 \
+	--log-level info
 ```
 
 - 输入：NDJSON 行，事件类型包括 `test_start`、`assertion`、`invocation_start/end`、`cond`。
 - 输出：JSONL，每个断言一行记录。
 - 过滤：用 `--suite` 或 `--test` 做子串过滤。
+- 诊断：如需查看详细日志，可加 `--log-level info`/`debug`（默认 `warning`）。
 
 ## 输出结构（每条记录）
 
@@ -103,6 +105,8 @@ brinfo_report.py \
 
 - `--dedupe-conds` 后匹配失败：
 	- 匹配并不受去重影响；若失败，多半是 cond_hash 不一致或静态序列缺失。
+- 需要更多调试信息？
+	- 可使用 `--log-level debug` 重新运行，观察 meta 加载、近似匹配初始化与断言输出过程。
 
 ## 示例
 

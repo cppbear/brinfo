@@ -50,5 +50,6 @@ brinfo_report \
   --meta meta_dir \
   --out triples.jsonl \
   [--dedupe-conds] [--approx-match] [--approx-topk K] [--approx-threshold T] \
+  [--log-level LEVEL] \
   [--suite REGEX] [--test REGEX] [--since TS] [--until TS]
 ```
